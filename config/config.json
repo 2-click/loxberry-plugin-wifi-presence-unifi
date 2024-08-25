@@ -4,5 +4,5 @@
 		"password": "",
 		"sitename": ""
 	},
-	"macaddresses": ""
+	"macaddresses": []
 }
