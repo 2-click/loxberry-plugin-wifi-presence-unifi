@@ -1,4 +1,5 @@
 # LoxBerry Plugin für UniFi Presence
+![Icon](https://github.com/2-click/loxberry-plugin-wifi-presence-unifi/blob/main/icons/icon_256.png)
 
 Dieses Loxberry Plugin ruft Verbindungsdaten zu WLAN-Geräten über die UniFi API ab ab und stellt sie über das Loxberry MQTT Plugin dem Miniserver zur Verfügung.
 
