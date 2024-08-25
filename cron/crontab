@@ -1,2 +1,2 @@
 #minute hour day_of_month month day_of_week user command
-* * * * * loxberry /usr/bin/php $LBPHTMLAUTH/tibber2mqtt/process.php forcepricerequest >/dev/null 2>&1
+* * * * * loxberry /usr/bin/php $LBPHTMLAUTH/wifi-presence-unifi/process.php poll >/dev/null 2>&1
