@@ -73,6 +73,8 @@ function savejsonasconfig($config){
 	
 	LOGDEB("Config to save:".$config);
 	
+	 // Todo: transform mac addresses from line by line to json list
+
 	//Get Config
 	$config = getconfigasjson();
 	
