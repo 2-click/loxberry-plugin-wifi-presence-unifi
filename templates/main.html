@@ -1,0 +1,207 @@
+<h1><TMPL_VAR SETTINGS.HEADING_BASICSETTINGS></h1>
+
+<p><TMPL_VAR SETTINGS.INTRODUCTION></p>
+
+<form id="WifiPresenceUnifiSettings" onsubmit="return false;">
+
+	<div data-role="fieldcontain">
+		<label for="Main.username"><TMPL_VAR SETTINGS.USERNAME></label>
+		<input name="Main.username" id="Main.username" type="text" />
+
+		<label for="Main.password">
+			<TMPL_VAR SETTINGS.PASSWORD>
+		</label>
+		<input name="Main.password" id="Main.password" type="text" />
+
+		<label for="Main.sitename">
+			<TMPL_VAR SETTINGS.SITENAME>
+		</label>
+		<input name="Main.sitename" id="Main.sitename" type="text" />
+	</div>
+	<p name="Main.status" id="Main.status"></p>
+	<div data-role="fieldcontain">
+		<fieldset data-role="controlgroup">
+			<legend><TMPL_VAR SETTINGS.MACLEGEND></legend>
+			<textarea name="macaddresses" id="macaddresses" rows="15" data-autogrow="false"
+				class="notes ui-input-text ui-shadow-inset ui-body-inherit ui-corner-all">
+			</textarea>
+
+			<label for="macaddresses"><TMPL_VAR SETTINGS.MACADDRESSES></label>
+		</fieldset>
+	<div>
+	
+</form> 
+<br />
+<div style="display:flex;align-items:center;justify-content:center;">
+	<button class="ui-btn" id="saveaction" data-inline="true" disabled="disabled"><TMPL_VAR SETTINGS.SAVESETTINGS></button>
+	<button class="ui-btn" id="forcerequest" data-inline="true"><TMPL_VAR SETTINGS.FORCEREQ></button>
+	<button class="ui-btn" id="forcecleancache" data-inline="true"><TMPL_VAR SETTINGS.FORCECLEANCACHE></button>
+</div>
+
+<div style="display:flex;align-items:center;justify-content:center;" id="ajaxresult"></div>
+ 
+<script>
+	var cfg;
+	var lbversion = '<TMPL_VAR LBVERSION>';
+	var jsonbackend_read = '/admin/system/ajax/ajax-generic.php?file=LBPCONFIG/tibber2mqtt/config.json&read';
+	var jsonbackend_write = '/admin/system/ajax/ajax-generic.php?file=LBPCONFIG/tibber2mqtt/config.json&write';
+	
+	$(document).ready(function(){
+		//Determine json backend based on version and pre-fill variables
+		var poststring_read = "";
+		if(lbversion.startsWith("2")){
+			jsonbackend_read = 'process.php';
+			jsonbackend_write = 'process.php';
+			poststring_read = {action: 'getconfigasjson'};
+		}
+	
+		// Read config
+		$.ajax(jsonbackend_read, { 
+			type: 'POST',
+			data: poststring_read
+		})
+		.done(function(response) {
+			cfg = JSON.parse(response);
+			
+			//Apply config to fields
+			for(settingarea in cfg){
+				if(typeof(cfg[settingarea]) != 'object'){
+					if($("#"+settingarea).attr('type') == "checkbox") {
+						$("#"+settingarea).prop('checked', cfg[settingarea]);
+					}else {
+						$("#"+settingarea).val(cfg[settingarea]);
+					}
+				}else{
+					for(var setting in cfg[settingarea]) {
+						if($("#"+settingarea+"\\."+setting).attr('type') == "checkbox") {
+								$("#"+settingarea+"\\."+setting).prop('checked', cfg[settingarea][setting]);
+						}else {
+							$("#"+settingarea+"\\."+setting).val(cfg[settingarea][setting]);
+						}
+					}
+				}
+			}
+				
+			
+			//Check if username  was part of config
+			if(cfg.Main.username == ""){
+				//Deactivate force pricerequest button
+				$("#forcerequest").attr("disabled", true);
+			}else{
+				//Todo: Get API Status
+				$.ajax('process.php', { 
+					type: 'POST',
+					data: {action: 'status'}
+				})
+				.done(function(resp) {
+					web_response = JSON.parse(resp);
+					
+					
+				})
+				.fail(function(resp) {
+					$("#status").css("color", "red").html("<TMPL_VAR SETTINGSJS.HINT_GENERAL_ERROR>");
+				})
+			}
+			
+		})
+
+	});	
+		
+	$('input, select').change(function(event) {
+		//Keep cfg array up to date
+		var idarr = $(this).attr('id').split(".");
+		$("#ajaxresult").css("color", "blue").html("<TMPL_VAR SETTINGSJS.UNSAVED_CHANGES>");
+		$("#saveaction").attr("disabled", false);
+		$("#forcepricerequest").attr("disabled", true);
+		
+		if(idarr.length == 1){
+			if($(this).attr('type') == "checkbox") {
+				cfg[idarr[0]] = $(this).prop('checked');
+			}else{
+				cfg[idarr[0]] = $(this).val();
+			}
+		}else{
+			if($(this).attr('type') == "checkbox") {
+				cfg[idarr[0]][idarr[1]] = $(this).prop('checked');
+			}else{
+				cfg[idarr[0]][idarr[1]] = $(this).val();
+			}	
+		}
+	});
+
+	
+	$("#saveaction").click(function(){
+		
+		//Fill post String based on LB version | url variable set in document ready
+		if(lbversion.startsWith("2")){
+			poststring_write = {action: 'savejsonasconfig', configToSave: JSON.stringify(cfg)};
+		}else{
+			poststring_write = JSON.stringify(cfg);
+		}
+		
+		$("#saveaction").attr("disabled", true);
+		$.ajax(jsonbackend_write, { 
+			type: 'POST',
+			dataType: 'json',
+			data: poststring_write
+		})
+		.done(function() {
+			//Also delete cached file, as saved values may no longer fit
+			$.ajax('process.php', { 
+				type: 'POST',
+				data: {action: 'clearcache'}
+			})
+			.done(function() {
+				$("#ajaxresult").css("color", "green").html("<TMPL_VAR SETTINGSJS.SAVING_SUCCESS>");
+				$("#forcepricerequest").attr("disabled", false);
+			})
+			.fail(function() {
+				$("#ajaxresult").css("color", "red").html("<TMPL_VAR SETTINGSJS.SAVINGCACHE_ERROR>");
+			})
+		})
+		.fail(function() {
+			$("#ajaxresult").css("color", "red").html("<TMPL_VAR SETTINGSJS.SAVING_ERROR>");
+		})
+		.always(function() {
+			$("#saveaction").attr("disabled", false);
+		});
+	});
+	
+	$("#forcepricerequest").click(function(){
+		$("#forcerequest").attr("disabled", true);
+		
+		$.ajax('process.php', { 
+			type: 'POST',
+			data: {action: 'forcerequest'}
+		})
+		.done(function(resp) {
+			$("#ajaxresult").css("color", "green").html("<TMPL_VAR SETTINGSJS.FORCEREQ_SUCCESS>");
+		})
+		.fail(function(resp) {
+			$("#ajaxresult").css("color", "red").html("<TMPL_VAR SETTINGSJS.FORCEREQ_ERROR>");
+		})
+		.always(function(resp) {
+			$("#forcerequest").attr("disabled", false);
+		});
+	});
+	
+	$("#forcecleancache").click(function(){
+		$("#forcecleancache").attr("disabled", true);
+		
+		$.ajax('process.php', { 
+			type: 'POST',
+			data: {action: 'clearcache'}
+		})
+		.done(function(resp) {
+			$("#ajaxresult").css("color", "green").html("<TMPL_VAR SETTINGSJS.FORCECLEANCACHE_SUCCESS>");
+		})
+		.fail(function(resp) {
+			$("#ajaxresult").css("color", "red").html("<TMPL_VAR SETTINGSJS.FORCECLEANCACHE_ERROR>");
+		})
+		.always(function(resp) {
+			$("#forcecleancache").attr("disabled", false);
+		});
+	});
+	
+</script>
+
