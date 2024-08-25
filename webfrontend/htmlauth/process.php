@@ -46,7 +46,7 @@ switch ($requestedAction){
 		break;
 	default:
 		http_response_code(404);
-		notify(LBPCONFIGDIR, "tibber2mqtt", "process.php has been called without parameter.", "error");
+		notify(LBPCONFIGDIR, "wifi-presence-unifi", "process.php has been called without parameter.", "error");
 		LOGERR("No action has been requested");
 		break;
 }
@@ -365,39 +365,6 @@ function clearcache(){
 	file_put_contents(CacheFile, ""); 
 }
 
-function gethomes(){
-	LOGINF("Switched to gethomes");
-	LOGTITLE("gethomes");
-	
-	//Get Config
-	$tb_config = getconfigasjson();
-	$tb_config = $tb_config->slave;
-	
-	if(!isset($tb_config->Main->token) OR $tb_config->Main->token == ""){
-		//Abort, as token not available.
-		http_response_code(404);
-		notify(LBPCONFIGDIR, "tibber2mqtt", "No Tibber token saved in settings.", "error");
-		LOGERR("No Tibber token saved in settings");
-		return;
-	}
-	
-	//GetHomes Call String
-	$gethomes_call = '{
-		viewer {
-			homes {
-				id
-				appNickname
-			}
-		}
-	}';
-	
-	$homes = callAPI($tb_config->Main->token, json_encode(['query' => $gethomes_call]));
-	if($homes == false){
-		return;
-	}
-
-	echo json_encode($homes["data"]["viewer"]["homes"]);
-}
 
 function callAPI($token, $postdata){
 	LOGDEB("POSTDATA for Tibber API Call:".$postdata);
