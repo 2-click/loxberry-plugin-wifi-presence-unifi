@@ -28,16 +28,6 @@ switch ($requestedAction){
 		pollUnifi();
 		LOGEND("Processing finished.");
 		break;
-	case "getconfigasjson":
-		LOGTITLE("getconfigasjson");
-		getconfigasjson(true);
-		LOGEND("Processing finished.");
-		break;
-	case "savejsonasconfig":
-		LOGTITLE("savejsonasconfig");
-		savejsonasconfig($_POST["configToSave"]);
-		LOGEND("Processing finished.");
-		break;
 	default:
 		http_response_code(404);
 		notify(LBPCONFIGDIR, "wifi-presence-unifi", "process.php has been called without parameter.", "error");
@@ -185,10 +175,10 @@ function pollUnifi(){
 	$config = getconfigasjson();
 	$config = $config->slave;
 	
-	if(!isset($config->Main->username) OR $config->Main->token == "" OR !isset($config->Main->password) OR $config->Main->password == ""){
+	if(!isset($config->Main->username) OR $config->Main->username == "" OR !isset($config->Main->password) OR $config->Main->password == ""){
 		//Abort, as creds not available.
 		http_response_code(404);
-		notify(LBPCONFIGDIR, "wifi-presence-unifi", "No credentials saved in settings.", "error");
+		notify(LBPCONFIGDIR, "wifi-presence-unifi", "No credentials saved in settings." . json_encode($config), "error");
 		LOGERR("No credentials saved in settings.");
 		return;
 	}
