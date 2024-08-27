@@ -33,7 +33,7 @@
 
 			<label for="macaddresses"><TMPL_VAR SETTINGS.MACADDRESSES></label>
 		</fieldset>
-	<div>
+	</div>
 	
 </form> 
 <br />
@@ -48,8 +48,8 @@
 <script>
 	var cfg;
 	var lbversion = '<TMPL_VAR LBVERSION>';
-	var jsonbackend_read = '/admin/system/ajax/ajax-generic.php?file=LBPCONFIG/tibber2mqtt/config.json&read';
-	var jsonbackend_write = '/admin/system/ajax/ajax-generic.php?file=LBPCONFIG/tibber2mqtt/config.json&write';
+	var jsonbackend_read = '/admin/system/ajax/ajax-generic.php?file=LBPCONFIG/wifi-presence-unifi/config.json&read';
+	var jsonbackend_write = '/admin/system/ajax/ajax-generic.php?file=LBPCONFIG/wifi-presence-unifi/config.json&write';
 	
 	$(document).ready(function(){
 		//Determine json backend based on version and pre-fill variables
@@ -69,19 +69,23 @@
 			cfg = JSON.parse(response);
 			
 			//Apply config to fields
-			for(settingarea in cfg){
-				if(typeof(cfg[settingarea]) != 'object'){
-					if($("#"+settingarea).attr('type') == "checkbox") {
-						$("#"+settingarea).prop('checked', cfg[settingarea]);
-					}else {
-						$("#"+settingarea).val(cfg[settingarea]);
+			for (settingarea in cfg) {
+				if (typeof (cfg[settingarea]) != 'object' || Array.isArray(cfg[settingarea])) {
+					if (Array.isArray(cfg[settingarea]) && settingarea === 'macaddresses') {
+						// Convert the macaddresses array to a newline-separated string
+						let macString = cfg[settingarea].join('\n');
+						$("#" + settingarea).val(macString);
+					} else if ($("#" + settingarea).attr('type') == "checkbox") {
+						$("#" + settingarea).prop('checked', cfg[settingarea]);
+					} else {
+						$("#" + settingarea).val(cfg[settingarea]);
 					}
-				}else{
-					for(var setting in cfg[settingarea]) {
-						if($("#"+settingarea+"\\."+setting).attr('type') == "checkbox") {
-								$("#"+settingarea+"\\."+setting).prop('checked', cfg[settingarea][setting]);
-						}else {
-							$("#"+settingarea+"\\."+setting).val(cfg[settingarea][setting]);
+				} else {
+					for (var setting in cfg[settingarea]) {
+						if ($("#" + settingarea + "\\." + setting).attr('type') == "checkbox") {
+							$("#" + settingarea + "\\." + setting).prop('checked', cfg[settingarea][setting]);
+						} else {
+							$("#" + settingarea + "\\." + setting).val(cfg[settingarea][setting]);
 						}
 					}
 				}
@@ -112,27 +116,29 @@
 
 	});	
 		
-	$('input, select').change(function(event) {
+	$('input, select, textarea').change(function (event) {
 		//Keep cfg array up to date
 		var idarr = $(this).attr('id').split(".");
 		$("#ajaxresult").css("color", "blue").html("<TMPL_VAR SETTINGSJS.UNSAVED_CHANGES>");
 		$("#saveaction").attr("disabled", false);
 		$("#poll").attr("disabled", true);
-		
-		if(idarr.length == 1){
-			if($(this).attr('type') == "checkbox") {
-				cfg[idarr[0]] = $(this).prop('checked');
-			}else{
-				cfg[idarr[0]] = $(this).val();
-			}
-		}else{
-			if($(this).attr('type') == "checkbox") {
-				cfg[idarr[0]][idarr[1]] = $(this).prop('checked');
-			}else{
-				cfg[idarr[0]][idarr[1]] = $(this).val();
-			}	
+
+		var value;
+		if ($(this).is('textarea')) {
+			value = $(this).val().split('\n'); // Split the textarea value by new lines into an array
+		} else if ($(this).attr('type') == "checkbox") {
+			value = $(this).prop('checked');
+		} else {
+			value = $(this).val();
+		}
+
+		if (idarr.length == 1) {
+			cfg[idarr[0]] = value;
+		} else {
+			cfg[idarr[0]][idarr[1]] = value;
 		}
 	});
+
 
 	
 	$("#saveaction").click(function(){
