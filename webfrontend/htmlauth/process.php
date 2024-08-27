@@ -84,7 +84,9 @@ function getAccessToken($username, $password, $url)
 	
     if ($response === false || $httpCode != 200) {
         curl_close($ch);
-        throw new Exception("Could not login into API", 503);
+		notify(LBPCONFIGDIR, "wifi-presence-unifi", "wifi-presence-unifi Plugin: Login to unifi failed", "error");
+		LOGERR("Login to unifi failed (username: " . $username . ")");
+		die();
     }
 
     curl_close($ch);
@@ -141,8 +143,8 @@ function getClients($cookieFile, $url, $siteName)
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 	LOGDEB("Data retrieved from API:".json_encode($response));
     if ($response === false || $httpCode != 200) {
-        curl_close($ch);
-        throw new Exception("Could not fetch API", 503);
+		notify(LBPCONFIGDIR, "wifi-presence-unifi", "wifi-presence-unifi Plugin: fetching unifi clients failed", "error");
+		LOGERR("Fetching unifi clients failed");
     }
 
     curl_close($ch);
@@ -178,7 +180,7 @@ function pollUnifi(){
 	if(!isset($config->Main->username) OR $config->Main->username == "" OR !isset($config->Main->password) OR $config->Main->password == ""){
 		//Abort, as creds not available.
 		http_response_code(404);
-		notify(LBPCONFIGDIR, "wifi-presence-unifi", "No credentials saved in settings." . json_encode($config), "error");
+		notify(LBPCONFIGDIR, "wifi-presence-unifi", "No credentials saved in settings.", "error");
 		LOGERR("No credentials saved in settings.");
 		return;
 	}
@@ -208,11 +210,10 @@ function pollUnifi(){
 		}
 
 		// Prepare UniFi API
-		$URL = $config->URL;
-		$cookieJar = getAccessToken($config->username, $config->password, $URL);
+		$cookieJar = getAccessToken($config->Main->username, $config->Main->password, $config->Main->url);
 
 		// Get all clients
-		$clients = getClients($cookieJar, $URL, $config->sitename);
+		$clients = getClients($cookieJar, $config->Main->url, $config->Main->sitename);
 		// Start looping through interesting mac addresses and gather information
 		foreach ($config->macaddresses as $mac) {
 			$deviceFound = false;
