@@ -61,36 +61,6 @@ function getconfigasjson($output = false){
 	}
 }
 
-function savejsonasconfig($config){
-	LOGINF("Switched to savejsonasconfig");
-	
-	if(!isset($config) || $config == "" || $config == null || $config == "null"){
-		http_response_code(404);
-		notify(LBPCONFIGDIR, "wifi-presence-unifi", "Saveconfig has been called without valid config.", "error");
-		LOGERR("Saveconfig has been called without valid config.");
-		return;
-	}
-	
-
-	LOGDEB("Config to save:".$config);
-	
-	 // Todo: transform mac addresses from line by line to json list
-
-	//Get Config
-	$current_config = getconfigasjson();
-	
-	// Change a value 
-	$current_config->slave = json_decode($config);
-	
-	LOGDEB("Updated config object:".json_encode($current_config));
-	
-	// Write all changes
-	$current_config->write();
-	
-	//End in same way as ajax-generic of LB3
-	echo json_encode($current_config->slave); 
-	return;
-}
 
 
 function getAccessToken($username, $password, $url)

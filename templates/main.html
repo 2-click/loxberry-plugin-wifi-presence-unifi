@@ -5,42 +5,42 @@
 <form id="WifiPresenceUnifiSettings" onsubmit="return false;">
 
 	<div data-role="fieldcontain">
-		<label for="Main.url">
+		<label for="url">
 			<TMPL_VAR SETTINGS.URL>
 		</label>
-		<input name="Main.url" id="Main.url" type="text" />
+		<br>
+		<input name="url" id="url" type="text" />
 
 
-		<label for="Main.username"><TMPL_VAR SETTINGS.USERNAME></label>
-		<input name="Main.username" id="Main.username" type="text" />
+		<label for="username"><TMPL_VAR SETTINGS.USERNAME></label>
+		<br>
+		<input name="username" id="username" type="text" />
 
-		<label for="Main.password">
+		<label for="password">
 			<TMPL_VAR SETTINGS.PASSWORD>
 		</label>
-		<input name="Main.password" id="Main.password" type="text" />
+		<br>
+		<input name="password" id="password" type="text" />
 
-		<label for="Main.sitename">
+		<label for="sitename">
 			<TMPL_VAR SETTINGS.SITENAME>
 		</label>
-		<input name="Main.sitename" id="Main.sitename" type="text" />
-	</div>
-	<p name="Main.status" id="Main.status"></p>
-	<div data-role="fieldcontain">
-		<fieldset data-role="controlgroup">
-			<legend><TMPL_VAR SETTINGS.MACLEGEND></legend>
-			<textarea name="macaddresses" id="macaddresses" rows="15" data-autogrow="false"
-				class="notes ui-input-text ui-shadow-inset ui-body-inherit ui-corner-all"></textarea>
+		<br>
+		<input name="sitename" id="sitename" type="text" />
 
-			<label for="macaddresses"><TMPL_VAR SETTINGS.MACADDRESSES></label>
-		</fieldset>
+		<label for="macaddressesraw">
+			<TMPL_VAR SETTINGS.MACADDRESSES>
+		</label>
+		<textarea name="macaddressesraw" id="macaddressesraw" rows="15" data-autogrow="false"
+			class="notes ui-input-text ui-shadow-inset ui-body-inherit ui-corner-all"></textarea>
 	</div>
+	<p name="status" id="status"></p>
 	
 </form> 
 <br />
 <div style="display:flex;align-items:center;justify-content:center;">
-	<button class="ui-btn" id="saveaction" data-inline="true" disabled="disabled"><TMPL_VAR SETTINGS.SAVESETTINGS></button>
+	<button class="ui-btn" id="saveaction" data-inline="true"><TMPL_VAR SETTINGS.SAVESETTINGS></button>
 	<button class="ui-btn" id="poll" data-inline="true"><TMPL_VAR SETTINGS.FORCEPOLL></button>
-	<button class="ui-btn" id="forcecleancache" data-inline="true"><TMPL_VAR SETTINGS.FORCECLEANCACHE></button>
 </div>
 
 <div style="display:flex;align-items:center;justify-content:center;" id="ajaxresult"></div>
@@ -48,121 +48,79 @@
 <script>
 	var cfg;
 	var lbversion = '<TMPL_VAR LBVERSION>';
-	var jsonbackend_read = '/admin/system/ajax/ajax-generic.php?file=LBPCONFIG/wifi-presence-unifi/config.json&read';
-	var jsonbackend_write = '/admin/system/ajax/ajax-generic.php?file=LBPCONFIG/wifi-presence-unifi/config.json&write';
+	var jsonbackend_read = '/admin/system/ajax/ajax-generic.php?file=LBPCONFIG/wifi-presence-unifi/config.json&section=Main&read';
+	var jsonbackend_write = '/admin/system/ajax/ajax-generic.php?file=LBPCONFIG/wifi-presence-unifi/config.json&section=Main&replace';
 	
-	$(document).ready(function(){
-		//Determine json backend based on version and pre-fill variables
-		var poststring_read = "";
-		if(lbversion.startsWith("2")){
-			jsonbackend_read = 'process.php';
-			jsonbackend_write = 'process.php';
-			poststring_read = {action: 'getconfigasjson'};
-		}
-	
+	$(document).ready(function () {
 		// Read config
-		$.ajax(jsonbackend_read, { 
-			type: 'POST',
-			data: poststring_read
-		})
-		.done(function(response) {
-			cfg = JSON.parse(response);
-			
-			//Apply config to fields
-			for (settingarea in cfg) {
-				if (typeof (cfg[settingarea]) != 'object' || Array.isArray(cfg[settingarea])) {
-					if (Array.isArray(cfg[settingarea]) && settingarea === 'macaddresses') {
-						// Convert the macaddresses array to a newline-separated string
-						let macString = cfg[settingarea].join('\n');
-						$("#" + settingarea).val(macString);
-					} else if ($("#" + settingarea).attr('type') == "checkbox") {
-						$("#" + settingarea).prop('checked', cfg[settingarea]);
-					} else {
-						$("#" + settingarea).val(cfg[settingarea]);
-					}
-				} else {
-					for (var setting in cfg[settingarea]) {
-						if ($("#" + settingarea + "\\." + setting).attr('type') == "checkbox") {
-							$("#" + settingarea + "\\." + setting).prop('checked', cfg[settingarea][setting]);
-						} else {
-							$("#" + settingarea + "\\." + setting).val(cfg[settingarea][setting]);
-						}
-					}
-				}
-			}
-				
-			
-			//Check if username  was part of config
-			if(cfg.Main.username == ""){
-				//Deactivate force pricerequest button
-				$("#poll").attr("disabled", true);
-			}else{
-				//Todo: Get API Status
-				$.ajax('process.php', { 
-					type: 'POST',
-					data: {action: 'status'}
-				})
-				.done(function(resp) {
-					web_response = JSON.parse(resp);
-					
-					
-				})
-				.fail(function(resp) {
-					$("#status").css("color", "red").html("<TMPL_VAR SETTINGSJS.HINT_GENERAL_ERROR>");
-				})
-			}
-			
-		})
-
-	});	
-		
-	$('input, select, textarea').change(function (event) {
-		//Keep cfg array up to date
-		var idarr = $(this).attr('id').split(".");
-		$("#ajaxresult").css("color", "blue").html("<TMPL_VAR SETTINGSJS.UNSAVED_CHANGES>");
-		$("#saveaction").attr("disabled", false);
-		$("#poll").attr("disabled", true);
-
-		var value;
-		if ($(this).is('textarea')) {
-			value = $(this).val().split('\n'); // Split the textarea value by new lines into an array
-		} else if ($(this).attr('type') == "checkbox") {
-			value = $(this).prop('checked');
-		} else {
-			value = $(this).val();
-		}
-
-		if (idarr.length == 1) {
-			cfg[idarr[0]] = value;
-		} else {
-			cfg[idarr[0]][idarr[1]] = value;
-		}
-	});
-
-
-	
-	$("#saveaction").click(function(){
-		
-		//Fill post String based on LB version | url variable set in document ready
-		if(lbversion.startsWith("2")){
-			poststring_write = {action: 'savejsonasconfig', configToSave: JSON.stringify(cfg)};
-		}else{
-			poststring_write = JSON.stringify(cfg);
-		}
-		
-		$("#saveaction").attr("disabled", true);
-		$.ajax(jsonbackend_write, { 
+		$.ajax({
+			url: jsonbackend_read,
 			type: 'POST',
 			dataType: 'json',
-			data: poststring_write
-		})
-		.fail(function() {
-			$("#ajaxresult").css("color", "red").html("<TMPL_VAR SETTINGSJS.SAVING_ERROR>");
-		})
-		.always(function() {
-			$("#saveaction").attr("disabled", false);
+			success: function (response) {
+				console.log(response); // Überprüfen der Struktur des response-Objekts
+
+				// Fill the form fields with the corresponding values from the JSON response
+				$('#url').val(response.url);
+				$('#username').val(response.username);
+				$('#password').val(response.password);
+				$('#sitename').val(response.sitename);
+
+				// Join the MacAddressesArray with new lines and set it to the textarea
+				if (response.macaddresses && Array.isArray(response.macaddresses)) {
+					$('#macaddressesraw').val(response.macaddresses.join('\r\n'));
+				}
+			},
+			error: function (xhr, status, error) {
+				// Handle error
+				$('#status').text('Error loading configuration: ' + error);
+			}
 		});
 	});
+
+
+		
+
+
+	$("#saveaction").click(function (e) {
+		e.preventDefault(); // Prevent the default form submission
+
+		// Correctly selecting the textarea using escaped dot in the selector
+		var macAddresses = $("#macaddressesraw").val().split('\n');
+
+		// Filter out empty lines
+		macAddresses = macAddresses.filter(function (address) {
+			return address.trim() !== ''; // Remove lines that are empty or contain only whitespace
+		});
+
+		// Optional: You can log the filtered array to see the output
+		console.log(macAddresses);
+
+		// Assuming you want to include this array in your AJAX request, you can modify the FormData accordingly
+		var formData = new FormData(WifiPresenceUnifiSettings);
+
+		// Loop through the array and append each item individually
+		macAddresses.forEach(function (address, index) {
+			formData.append('macaddresses[]', address);
+		});
+
+		$.ajax({
+			url: jsonbackend_write,
+			type: 'POST',
+			data: formData,
+			contentType: false,
+			processData: false,
+			success: function (result) {
+				alert("Returned: " + result.fname + " " + result.lname);
+			},
+			error: function (xhr, status, error) {
+				console.error("Error: " + status + " " + error);
+			}
+		});
+	});
+
+
+
 	
 	$("#poll").click(function(){
 		$("#poll").attr("disabled", true);
