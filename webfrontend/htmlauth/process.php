@@ -221,6 +221,7 @@ function pollUnifi(){
 		foreach ($config->Main->macaddresses as $mac) {
 			LOGINF("Searching ". $mac. " in unifi API results");
 			$deviceFound = false;
+			$foundClient = null;
 			foreach ($clients as $client) {
 				if ($client->mac === $mac) {
 					$deviceFound = true; //We found the mac address in the unifi results
