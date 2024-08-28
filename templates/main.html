@@ -109,19 +109,10 @@
 			type: 'POST',
 			data: formData,
 			contentType: false,
-			processData: false,
-			success: function (result) {
-				alert("Returned: " + result.fname + " " + result.lname);
-			},
-			error: function (xhr, status, error) {
-				console.error("Error: " + status + " " + error);
-			}
+			processData: false
 		});
 	});
 
-
-
-	
 	$("#poll").click(function(){
 		$("#poll").attr("disabled", true);
 		
@@ -131,32 +122,9 @@
 		})
 		.done(function(resp) {
 			$("#ajaxresult").css("color", "green").html("<TMPL_VAR SETTINGSJS.FORCEPOLL_SUCCESS>");
-		})
-		.fail(function(resp) {
-			$("#ajaxresult").css("color", "red").html("<TMPL_VAR SETTINGSJS.FORCEPOLL_ERROR>");
-		})
-		.always(function(resp) {
-			$("#poll").attr("disabled", false);
 		});
 	});
 	
-	$("#forcecleancache").click(function(){
-		$("#forcecleancache").attr("disabled", true);
-		
-		$.ajax('process.php', { 
-			type: 'POST',
-			data: {action: 'clearcache'}
-		})
-		.done(function(resp) {
-			$("#ajaxresult").css("color", "green").html("<TMPL_VAR SETTINGSJS.FORCECLEANCACHE_SUCCESS>");
-		})
-		.fail(function(resp) {
-			$("#ajaxresult").css("color", "red").html("<TMPL_VAR SETTINGSJS.FORCECLEANCACHE_ERROR>");
-		})
-		.always(function(resp) {
-			$("#forcecleancache").attr("disabled", false);
-		});
-	});
 	
 </script>
 

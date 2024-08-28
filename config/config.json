@@ -3,7 +3,9 @@
 		"url": "",
 		"username": "",
 		"password": "",
-		"sitename": ""
+		"sitename": "default",
+		"macaddressesraw": "",
+		"macaddresses": []
 	},
 	"macaddresses": []
 }

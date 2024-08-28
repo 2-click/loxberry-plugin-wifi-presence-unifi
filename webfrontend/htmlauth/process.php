@@ -4,7 +4,7 @@ require_once("loxberry_io.php");
 require_once("loxberry_log.php");
 require_once("loxberry_json.php");
 require_once("phpMQTT/phpMQTT.php");
-define ("CookieFile", LBPDATADIR."/cookies"); #todo actually use that 
+define ("GLOBALCOOKIEFILE", LBPDATADIR."/cookies"); 
 
 
 //Start logging
@@ -22,7 +22,6 @@ if(isset($argv)){
 	$requestedAction = $argv[1];
 }
 
-# todo implement a status action
 switch ($requestedAction){
 	case "poll":
 		pollUnifi();
@@ -74,9 +73,8 @@ function getAccessToken($username, $password, $url)
 
     
 
-    $cookieFile = tempnam(sys_get_temp_dir(), 'cookie');
-    curl_setopt($ch, CURLOPT_COOKIEJAR, $cookieFile);
-    curl_setopt($ch, CURLOPT_COOKIEFILE, $cookieFile);
+    curl_setopt($ch, CURLOPT_COOKIEJAR, GLOBALCOOKIEFILE);
+    curl_setopt($ch, CURLOPT_COOKIEFILE, GLOBALCOOKIEFILE);
 
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -91,7 +89,7 @@ function getAccessToken($username, $password, $url)
 
     curl_close($ch);
 
-    return $cookieFile;
+    return GLOBALCOOKIEFILE;
 }
 
 function getSites($cookieFile, $url)
@@ -289,7 +287,18 @@ function pollUnifi(){
 			} else {
 				$mqttFriendlyUptimeByUAP = -1;
 			}
-			
+
+			if ($foundClient->hostname !== null) {
+				$mqttFriendlyHostname = $foundClient->hostname;
+			} else {
+				$mqttFriendlyHostname = -1;
+			}
+
+			if ($foundClient->name !== null) {
+				$mqttFriendlyName = $foundClient->name;
+			} else {
+				$mqttFriendlyName = -1;
+			}
 			
 
 			//MQTT transmission
@@ -309,6 +318,9 @@ function pollUnifi(){
 			$mqtt->publish("wifi-presence-unifi/clients/" . $mqttFriendlyMac . "/uptime_by_uap", $mqttFriendlyUptimeByUAP, 0, 1); //These are seconds
 			$mqtt->publish("wifi-presence-unifi/clients/" . $mqttFriendlyMac . "/assoc_time_ago", $mqttFriendlyAssocTimeAgo, 0, 1); //These are seconds
 			$mqtt->publish("wifi-presence-unifi/clients/" . $mqttFriendlyMac . "/latest_assoctime_ago", $mqttFriendlyLatestAssocTimeAgo, 0, 1); //These are seconds
+			$mqtt->publish("wifi-presence-unifi/clients/" . $mqttFriendlyMac . "/hostname", $mqttFriendlyHostname, 0, 1); //This is the network hostname
+			$mqtt->publish("wifi-presence-unifi/clients/" . $mqttFriendlyMac . "/name", $mqttFriendlyName, 0, 1); //This is the alias set in unifi
+
 
 		} 
 		$mqtt->close();
