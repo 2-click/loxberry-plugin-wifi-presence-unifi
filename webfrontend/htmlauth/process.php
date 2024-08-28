@@ -4,7 +4,7 @@ require_once("loxberry_io.php");
 require_once("loxberry_log.php");
 require_once("loxberry_json.php");
 require_once("phpMQTT/phpMQTT.php");
-define ("CacheFile", LBPDATADIR."/cookies.json"); #todo actually use that 
+define ("CookieFile", LBPDATADIR."/cookies"); #todo actually use that 
 
 
 //Start logging
@@ -41,7 +41,7 @@ function getconfigasjson($output = false){
 	
 	//Get Config
 	$config = new LBJSON(LBPCONFIGDIR."/config.json");
-	LOGDEB("Retrieved config:".json_encode($config));
+	LOGDEB("Retrieved backend config: ".json_encode($config));
 	
 	if($output){
 		echo json_encode($config->slave); 
@@ -80,7 +80,7 @@ function getAccessToken($username, $password, $url)
 
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-	LOGDEB("Data retrieved from API:".json_encode($response));
+	LOGDEB("Data retrieved from unifi API: ".json_encode($response));
 	
     if ($response === false || $httpCode != 200) {
         curl_close($ch);
@@ -111,7 +111,7 @@ function getSites($cookieFile, $url)
 
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-	LOGDEB("Data retrieved from API:".json_encode($response));
+	LOGDEB("Data retrieved from unifi API: ".json_encode($response));
     if ($response === false || $httpCode != 200) {
         curl_close($ch);
         throw new Exception("Could not fetch API", 503);
@@ -170,7 +170,7 @@ function checkClients($clients, $mac_addresses_of_interest)
 //
 // *****************************************************
 function pollUnifi(){	
-	LOGINF("Switched to pollUnifi");
+	LOGINF("Starting action poll");
 	LOGTITLE("pollunifi");
 	
 	//Get Config
@@ -193,7 +193,6 @@ function pollUnifi(){
 		return;
 	}
 	
-
 	try {
 		// Prepare MQTT
 		// Get the MQTT Gateway connection details from LoxBerry
@@ -214,35 +213,108 @@ function pollUnifi(){
 
 		// Get all clients
 		$clients = getClients($cookieJar, $config->Main->url, $config->Main->sitename);
+
+		if (is_array($clients)) {
+			LOGINF("Received ". count($clients) . " clients from unifi");
+		}
+		
+
 		// Start looping through interesting mac addresses and gather information
-		foreach ($config->macaddresses as $mac) {
+		foreach ($config->Main->macaddresses as $mac) {
+			LOGINF("Searching ". $mac. " in unifi API results");
 			$deviceFound = false;
 			foreach ($clients as $client) {
 				if ($client->mac === $mac) {
-					$deviceFound = true;
+					$deviceFound = true; //We found the mac address in the unifi results
+					$foundClient = $client; // For later use
 					if ($client->uptime > 1) {
-						$online = $true;
+						$online = true;
 					} else {
-						$online = $false;
+						$online = false;
 					}
 					break; // Stop searching once a matching MAC is found
 				}
 			}
 			if (!$deviceFound) {
-				$online = $false;
+				$online = false;
+				LOGINF("Client ". $mac. " not found in unifi API results, forcing status offline");
 			}
 			
 
-			if ($online === $true) {
-				$mqtt->publish("wifi-presence-unifi/clients/" . $mac . "/online", $true, 0, 1); #todo check if $true is good or if we need to send 1
+
+			//prepare some variables for mqtt transmission
+			$mqttFriendlyMac = str_replace(':', '-', $mac);
+			if ($foundClient->powersave_enabled) {
+				$mqttFriendlyPowersaveEnabled = 1;
 			} else {
-				$mqtt->publish("wifi-presence-unifi/clients/" . $mac . "/online", $false, 0, 1); #todo check if $false is good or if we need to send 0
+				$mqttFriendlyPowersaveEnabled = 0;
 			}
+			if ($foundClient->ap_mac !== null) {
+				$mqttFriendlyApMac = str_replace(':', '-', $foundClient->ap_mac);
+			} else {
+				$apMac = "";
+			}
+			if ($foundClient->disconnect_timestamp !== null) {
+				$mqttFriendlyLastDisconnectAgo = time() - $foundClient->disconnect_timestamp;
+			} else {
+				$mqttFriendlyLastDisconnectAgo = -1;
+			}
+
+			if ($foundClient->last_seen !== null) {
+				$mqttFriendlyLastSeenAgo = time() - $foundClient->last_seen;
+			} else {
+				$mqttFriendlyLastSeenAgo = -1;
+			}
+
+			if ($foundClient->uptime !== null) {
+				$mqttFriendlyUptime = $foundClient->uptime;
+			} else {
+				$mqttFriendlyUptime = -1;
+			}
+			
+			if ($foundClient->assoc_time !== null) {
+				$mqttFriendlyAssocTimeAgo = time() - $foundClient->assoc_time;
+			} else {
+				$mqttFriendlyAssocTimeAgo = -1;
+			}
+			
+			if ($foundClient->latest_assoc_time !== null) {
+				$mqttFriendlyLatestAssocTimeAgo = time() - $foundClient->latest_assoc_time;
+			} else {
+				$mqttFriendlyLatestAssocTimeAgo = -1;
+			}
+
+			if ($foundClient->_uptime_by_uap !== null) {
+				$mqttFriendlyUptimeByUAP = $foundClient->_uptime_by_uap;
+			} else {
+				$mqttFriendlyUptimeByUAP = -1;
+			}
+			
+			
+
+			//MQTT transmission
+			if ($online === true) {
+				LOGINF("Client ". $mac. " is online");
+				$mqtt->publish("wifi-presence-unifi/clients/" . $mqttFriendlyMac . "/online", 1, 0, 1);
+			} else {
+				LOGINF("Client ". $mac. " is offline");
+				$mqtt->publish("wifi-presence-unifi/clients/" . $mqttFriendlyMac . "/online", 0, 0, 1); 
+			}
+
+			$mqtt->publish("wifi-presence-unifi/clients/" . $mqttFriendlyMac . "/powersave_enabled", $mqttFriendlyPowersaveEnabled, 0, 1); // This is either 0 or 1
+			$mqtt->publish("wifi-presence-unifi/clients/" . $mqttFriendlyMac . "/ap_mac", $mqttFriendlyApMac, 0, 1); // This is a MAC
+			$mqtt->publish("wifi-presence-unifi/clients/" . $mqttFriendlyMac . "/disconnect_ago", $mqttFriendlyLastDisconnectAgo, 0, 1); //These are seconds
+			$mqtt->publish("wifi-presence-unifi/clients/" . $mqttFriendlyMac . "/last_seen_ago", $mqttFriendlyLastSeenAgo, 0, 1); //These are seconds
+			$mqtt->publish("wifi-presence-unifi/clients/" . $mqttFriendlyMac . "/uptime", $mqttFriendlyUptime, 0, 1); //These are seconds
+			$mqtt->publish("wifi-presence-unifi/clients/" . $mqttFriendlyMac . "/uptime_by_uap", $mqttFriendlyUptimeByUAP, 0, 1); //These are seconds
+			$mqtt->publish("wifi-presence-unifi/clients/" . $mqttFriendlyMac . "/assoc_time_ago", $mqttFriendlyAssocTimeAgo, 0, 1); //These are seconds
+			$mqtt->publish("wifi-presence-unifi/clients/" . $mqttFriendlyMac . "/latest_assoctime_ago", $mqttFriendlyLatestAssocTimeAgo, 0, 1); //These are seconds
+
 		} 
 		$mqtt->close();
 
 	} catch (Exception $e) {
-		echo "Error: " . $e->getMessage();
+		LOGERR($e->getMessage());
 	}
 
 	
