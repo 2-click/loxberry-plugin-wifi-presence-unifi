@@ -122,11 +122,48 @@ function getSites($cookieFile, $url)
     return $sites->data;
 }
 
+function getClientHistory($cookieFile, $url, $siteName)
+{
+	$ch = curl_init();
+	curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+	curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+	// This API endpoint will return all devices from the last 12 months. Also offline devices. It does not include as much information as getClients though.
+	curl_setopt($ch, CURLOPT_URL, $url . '/api/s/' . $siteName . '/stat/alluser/');
+	curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+	curl_setopt($ch, CURLOPT_HTTPHEADER, [
+		'Content-Type: application/json',
+		'Accept: application/json'
+	]);
+	curl_setopt($ch, CURLOPT_COOKIEFILE, $cookieFile);
+
+
+
+	$response = curl_exec($ch);
+	$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+	LOGDEB("Data retrieved from API:" . json_encode($response));
+	if ($response === false || $httpCode != 200) {
+		notify(LBPCONFIGDIR, "wifi-presence-unifi", "wifi-presence-unifi Plugin: fetching unifi client history failed", "error");
+		LOGERR("Fetching unifi client history failed");
+	}
+
+	curl_close($ch);
+
+	$users = json_decode($response);
+
+	return $users->data;
+}
+
+//*******************************************************************************
+// 
+//Helper function to retrieve all devices (online and offline) from the past 12 months
+//
+//*******************************************************************************
 function getClients($cookieFile, $url, $siteName)
 {
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+	// This API endpoint will only return online devices
     curl_setopt($ch, CURLOPT_URL, $url . '/api/s/' . $siteName . '/stat/sta/');
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_HTTPHEADER, [
@@ -152,21 +189,12 @@ function getClients($cookieFile, $url, $siteName)
     return $clients->data;
 }
 
-// *****************************************************
-// 
-// Helper function to retrieve device information from unifi client list
-//
-// *****************************************************
-function checkClients($clients, $mac_addresses_of_interest)
-{
 
-}
-
-// *****************************************************
+//*******************************************************************************
 // 
-// Fetch online client devices and send status to MQTT
+//Helper function to retrieve device information from unifi client list
 //
-// *****************************************************
+//*******************************************************************************
 function pollUnifi(){	
 	LOGINF("Starting action poll");
 	LOGTITLE("pollunifi");
@@ -215,7 +243,13 @@ function pollUnifi(){
 		if (is_array($clients)) {
 			LOGINF("Received ". count($clients) . " clients from unifi");
 		}
-		
+
+		// Get all clients, online and offline
+		$clientHistory = getClientHistory($cookieJar, $config->Main->url, $config->Main->sitename);
+
+		if (is_array($clientHistory)) {
+			LOGINF("Received " . count($clients) . " clients (history) from unifi");
+		}
 
 		// Start looping through interesting mac addresses and gather information
 		foreach ($config->Main->macaddresses as $mac) {
