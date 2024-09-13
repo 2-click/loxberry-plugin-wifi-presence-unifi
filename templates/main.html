@@ -28,6 +28,12 @@
 		<br>
 		<input name="sitename" id="sitename" type="text" />
 
+		<label for="sitename">
+			<TMPL_VAR SETTINGS.VERSION>
+		</label>
+		<br>
+		<input name="version" id="version" type="text" />
+		
 		<label for="macaddressesraw">
 			<TMPL_VAR SETTINGS.MACADDRESSES>
 		</label>
@@ -65,6 +71,7 @@
 				$('#username').val(response.username);
 				$('#password').val(response.password);
 				$('#sitename').val(response.sitename);
+				$('#version').val(response.version);
 
 				// Join the MacAddressesArray with new lines and set it to the textarea
 				if (response.macaddresses && Array.isArray(response.macaddresses)) {

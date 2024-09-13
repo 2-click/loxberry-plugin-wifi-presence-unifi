@@ -4,6 +4,7 @@
 		"username": "",
 		"password": "",
 		"sitename": "default",
+		"version": "4.6.6",
 		"macaddressesraw": "",
 		"macaddresses": []
 	},

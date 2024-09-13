@@ -4,6 +4,7 @@ require_once("loxberry_io.php");
 require_once("loxberry_log.php");
 require_once("loxberry_json.php");
 require_once("phpMQTT/phpMQTT.php");
+require_once("include/Client.php");
 define ("GLOBALCOOKIEFILE", LBPDATADIR."/cookies"); 
 
 
@@ -51,150 +52,7 @@ function getconfigasjson($output = false){
 }
 
 
-
-function getAccessToken($username, $password, $url)
-{
-    $ch = curl_init();
-    $postData = json_encode([
-        'username' => $username,
-        'password' => $password,
-    ]);
-
-    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    curl_setopt($ch, CURLOPT_URL, $url . '/api/login');
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        'Content-Type: application/json',
-        'Accept: application/json'
-    ]);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
-
-    
-
-    curl_setopt($ch, CURLOPT_COOKIEJAR, GLOBALCOOKIEFILE);
-    curl_setopt($ch, CURLOPT_COOKIEFILE, GLOBALCOOKIEFILE);
-
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-	LOGDEB("Data retrieved from unifi API: ".json_encode($response));
-	
-    if ($response === false || $httpCode != 200) {
-        curl_close($ch);
-		notify(LBPCONFIGDIR, "wifi-presence-unifi", "wifi-presence-unifi Plugin: Login to unifi failed", "error");
-		LOGERR("Login to unifi failed (username: " . $username . ")");
-		die();
-    }
-
-    curl_close($ch);
-
-    return GLOBALCOOKIEFILE;
-}
-
-function getSites($cookieFile, $url)
-{
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    curl_setopt($ch, CURLOPT_URL, $url . '/api/self/sites');
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        'Content-Type: application/json',
-        'Accept: application/json'
-    ]);
-    curl_setopt($ch, CURLOPT_COOKIEFILE, $cookieFile);
-
-
-
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-	LOGDEB("Data retrieved from unifi API: ".json_encode($response));
-    if ($response === false || $httpCode != 200) {
-        curl_close($ch);
-        throw new Exception("Could not fetch API", 503);
-    }
-
-    curl_close($ch);
-
-    $sites = json_decode($response);
-
-    return $sites->data;
-}
-
-function getClientHistory($cookieFile, $url, $siteName)
-{
-	$ch = curl_init();
-	curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-	curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-	// This API endpoint will return all devices from the last 12 months. Also offline devices. It does not include as much information as getClients though.
-	curl_setopt($ch, CURLOPT_URL, $url . '/api/s/' . $siteName . '/stat/alluser/');
-	curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-	curl_setopt($ch, CURLOPT_HTTPHEADER, [
-		'Content-Type: application/json',
-		'Accept: application/json'
-	]);
-	curl_setopt($ch, CURLOPT_COOKIEFILE, $cookieFile);
-
-
-
-	$response = curl_exec($ch);
-	$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-	LOGDEB("Data retrieved from API:" . json_encode($response));
-	if ($response === false || $httpCode != 200) {
-		notify(LBPCONFIGDIR, "wifi-presence-unifi", "wifi-presence-unifi Plugin: fetching unifi client history failed", "error");
-		LOGERR("Fetching unifi client history failed");
-	}
-
-	curl_close($ch);
-
-	$users = json_decode($response);
-
-	return $users->data;
-}
-
-//*******************************************************************************
-// 
-//Helper function to retrieve all devices (online and offline) from the past 12 months
-//
-//*******************************************************************************
-function getClients($cookieFile, $url, $siteName)
-{
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-	// This API endpoint will only return online devices
-    curl_setopt($ch, CURLOPT_URL, $url . '/api/s/' . $siteName . '/stat/sta/');
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        'Content-Type: application/json',
-        'Accept: application/json'
-    ]);
-    curl_setopt($ch, CURLOPT_COOKIEFILE, $cookieFile);
-
-
-
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-	LOGDEB("Data retrieved from API:".json_encode($response));
-    if ($response === false || $httpCode != 200) {
-		notify(LBPCONFIGDIR, "wifi-presence-unifi", "wifi-presence-unifi Plugin: fetching unifi clients failed", "error");
-		LOGERR("Fetching unifi clients failed");
-    }
-
-    curl_close($ch);
-
-    $clients = json_decode($response);
-
-    return $clients->data;
-}
-
-
-//*******************************************************************************
-// 
-//Helper function to retrieve device information from unifi client list
-//
-//*******************************************************************************
+// Primary action
 function pollUnifi(){	
 	LOGINF("Starting action poll");
 	LOGTITLE("pollunifi");
@@ -234,22 +92,45 @@ function pollUnifi(){
 			return;
 		}
 
-		// Prepare UniFi API
-		$cookieJar = getAccessToken($config->Main->username, $config->Main->password, $config->Main->url);
+
+		// Initialize the UniFi API connection class and log in to the controller and do our thing
+		$unifi_connection = new UniFi_API\Client(
+			$config->Main->username,
+			$config->Main->password, 
+			$config->Main->url, 
+			$config->Main->sitename, 
+			$config->Main->version
+		);
+		$set_debug_mode = $unifi_connection->set_debug(false);
+		LOGDEB("Attempting login...");
+		$loginresults = $unifi_connection->login();
+		LOGDEB("Login response received");
+		if ($loginresults != true) {
+			notify(LBPCONFIGDIR, "wifi-presence-unifi", "wifi-presence-unifi Plugin: Login to unifi failed", "error");
+			LOGERR("Login to unifi failed with response " . $loginresults . " (username: " . $config->Main->username . ")");
+			die();
+		} else {
+			LOGINF("Login to UniFi was successful");
+		}
 
 		// Get all clients
-		$clients = getClients($cookieJar, $config->Main->url, $config->Main->sitename);
+		$clients = $unifi_connection->list_clients();
 
 		if (is_array($clients)) {
 			LOGINF("Received ". count($clients) . " clients from unifi");
+		} else {
+			LOGDEB("list_clients returned unexpected result");
 		}
 
 		// Get all clients, online and offline
-		$clientHistory = getClientHistory($cookieJar, $config->Main->url, $config->Main->sitename);
+		$clientHistory = $unifi_connection->stat_allusers();
 
 		if (is_array($clientHistory)) {
 			LOGINF("Received " . count($clients) . " clients (history) from unifi");
+		} else {
+			LOGDEB("stat_allusers returned unexpected result");
 		}
+
 
 		// Start looping through interesting mac addresses and gather information
 		foreach ($config->Main->macaddresses as $mac) {
