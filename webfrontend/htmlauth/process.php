@@ -114,6 +114,7 @@ function pollUnifi(){
 		}
 
 		// Get all clients
+		LOGDEB("Fetching UniFi clients...");
 		$clients = $unifi_connection->list_clients();
 
 		if (is_array($clients)) {
@@ -133,6 +134,7 @@ function pollUnifi(){
 
 
 		// Start looping through interesting mac addresses and gather information
+		$uplinkMacList = [];
 		foreach ($config->Main->macaddresses as $mac) {
 			LOGINF("Searching ". $mac. " in unifi API results");
 			$deviceFound = false;
@@ -143,6 +145,9 @@ function pollUnifi(){
 					$foundClient = $client; // For later use
 					if ($client->uptime > 1) {
 						$online = true;
+						if (!in_array($client->ap_mac, $uplinkMacList)) {
+							$uplinkMacList[] = $client->ap_mac;
+						}
 					} else {
 						$online = false;
 					}
@@ -238,9 +243,38 @@ function pollUnifi(){
 			$mqtt->publish("wifi-presence-unifi/clients/" . $mqttFriendlyMac . "/name", $mqttFriendlyName, 0, 1); //This is the alias set in unifi
 
 
-		} 
-		$mqtt->close();
+		}
 
+
+		// Starting to loop through APs to publish their state
+		LOGDEB("Fetching UniFi devices...");
+		$aps_array = $unifi_connection->list_aps();
+		if (is_array($clients)) {
+			LOGINF("Received " . count($aps_array) . " devices from unifi");
+		} else {
+			LOGERR("list_aps returned unexpected result");
+			die();
+		}
+		foreach ($aps_array as $ap) {
+			if ($ap->type === 'uap') {
+				//prepare some variables for mqtt transmission
+				$mqttFriendlyMac = str_replace(':', '-', $ap->ethernet_table[0]->mac);
+				$mqttFriendlyName = $ap->name;
+				$mqttFriendlyClientCount = $ap->num_sta;
+				// Check if this AP is the uplink of one of the monitored clients
+				if (in_array($ap->mac, $uplinkMacList)) {
+					$mqttFriendlyPresence = 1; 
+				} else {
+					$mqttFriendlyPresence = 0; 
+				}
+
+				$mqtt->publish("wifi-presence-unifi/devices/" . $mqttFriendlyMac . "/name", $mqttFriendlyName, 0, 1);
+				$mqtt->publish("wifi-presence-unifi/devices/" . $mqttFriendlyMac . "/clientcount", $mqttFriendlyClientCount, 0, 1);
+				$mqtt->publish("wifi-presence-unifi/devices/" . $mqttFriendlyMac . "/presence", $mqttFriendlyPresence, 0, 1);
+			}
+		}
+
+		$mqtt->close();
 	} catch (Exception $e) {
 		LOGERR($e->getMessage());
 	}
