@@ -132,8 +132,18 @@ function pollUnifi(){
 			LOGDEB("stat_allusers returned unexpected result");
 		}
 
+		// Get all UniFi devices (APs and switches)
+		LOGDEB("Fetching UniFi devices...");
+		$aps_array = $unifi_connection->list_aps();
+		if (is_array($clients)) {
+			LOGINF("Received " . count($aps_array) . " devices from unifi");
+		} else {
+			LOGERR("list_aps returned unexpected result");
+			die();
+		}
 
 		// Start looping through interesting mac addresses and gather information
+		LOGDEB("Starting client loop");
 		$uplinkMacList = [];
 		foreach ($config->Main->macaddresses as $mac) {
 			LOGINF("Searching ". $mac. " in unifi API results");
@@ -220,6 +230,17 @@ function pollUnifi(){
 			} else {
 				$mqttFriendlyName = -1;
 			}
+
+			LOGDEB("Looking up uplink ap name for device " . $foundClient->ap_mac);
+			foreach ($aps_array as $ap) {
+				if (isset($ap->ethernet_table[0]->mac) && $ap->ethernet_table[0]->mac === $foundClient->ap_mac) {
+					$mqttFriendlyAPName = $ap->name;
+					LOGDEB("Uplink ap name for device " . $foundClient->ap_mac . " is " . $mqttFriendlyAPName );
+					break;
+				} else {
+					$mqttFriendlyAPName = "-";
+				}
+			}
 			
 
 			//MQTT transmission
@@ -233,6 +254,7 @@ function pollUnifi(){
 
 			$mqtt->publish("wifi-presence-unifi/clients/" . $mqttFriendlyMac . "/powersave_enabled", $mqttFriendlyPowersaveEnabled, 0, 1); // This is either 0 or 1
 			$mqtt->publish("wifi-presence-unifi/clients/" . $mqttFriendlyMac . "/ap_mac", $mqttFriendlyApMac, 0, 1); // This is a MAC
+			$mqtt->publish("wifi-presence-unifi/clients/" . $mqttFriendlyMac . "/ap_name", $mqttFriendlyAPName, 0, 1); // This is a MAC
 			$mqtt->publish("wifi-presence-unifi/clients/" . $mqttFriendlyMac . "/disconnect_ago", $mqttFriendlyLastDisconnectAgo, 0, 1); //These are seconds
 			$mqtt->publish("wifi-presence-unifi/clients/" . $mqttFriendlyMac . "/last_seen_ago", $mqttFriendlyLastSeenAgo, 0, 1); //These are seconds
 			$mqtt->publish("wifi-presence-unifi/clients/" . $mqttFriendlyMac . "/uptime", $mqttFriendlyUptime, 0, 1); //These are seconds
@@ -246,15 +268,8 @@ function pollUnifi(){
 		}
 
 
-		// Starting to loop through APs to publish their state
-		LOGDEB("Fetching UniFi devices...");
-		$aps_array = $unifi_connection->list_aps();
-		if (is_array($clients)) {
-			LOGINF("Received " . count($aps_array) . " devices from unifi");
-		} else {
-			LOGERR("list_aps returned unexpected result");
-			die();
-		}
+		//Starting to loop through APs to publish their state
+		LOGDEB("Starting device loop");
 		foreach ($aps_array as $ap) {
 			if ($ap->type === 'uap') {
 				//prepare some variables for mqtt transmission
