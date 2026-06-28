@@ -34,7 +34,7 @@
 		</label>
 		<input name="version" id="version" type="text" placeholder="Enter Version"
 			style="width: 100%; padding: 10px; margin: 10px 0;" />
-		
+			
 		<label for="mqtt_topic_base">
 			<TMPL_VAR SETTINGS.MQTT_TOPIC_BASE>
 		</label>
@@ -111,6 +111,7 @@ textarea {
 				} else {
 					$('#mqtt_topic_base').val('mac').trigger('change'); 
 				}
+
 				// Gespeicherte MACs in einer globalen Variable ablegen, damit wir sie später beim Neuladen der Liste anhaken können
 				window.savedMacAddresses = response.macaddresses && Array.isArray(response.macaddresses) ? response.macaddresses : [];
 				
@@ -126,7 +127,6 @@ textarea {
 	});
 
 
-		
 	$("#fetch_devices").click(function (e) {
 		e.preventDefault();
 		$("#fetch_devices").text("<TMPL_VAR SETTINGSJS.DEVICES_LOADING>").attr("disabled", true);
@@ -158,9 +158,9 @@ textarea {
 			$("#device_list_container").html('<i style="color: red;">' + errorMsg + '</i>');
 			$("#fetch_devices").text("<TMPL_VAR SETTINGSJS.DEVICES_RETRY>").attr("disabled", false);
 		});
-	});	
+	});		
 
-	
+
 	$("#saveaction").click(function (e) {
 		e.preventDefault(); // Prevent the default form submission
 
@@ -177,7 +177,7 @@ textarea {
 			selectedMacs.push(mac);
 			formData.append('macaddresses[]', mac);
 		});
-
+		
 		// Falls nichts angehakt ist (aber die Liste geladen war), müssen wir ein leeres Array schicken
 		// Das machen wir, indem wir einfach einen Dummy-Wert senden, oder das Speichern leitet.
 		if (selectedMacs.length === 0) {
@@ -185,7 +185,7 @@ textarea {
 		}
 		
 		// Update der lokalen Speicherung für die UI
-		window.savedMacAddresses = selectedMacs;		
+		window.savedMacAddresses = selectedMacs;
 
 		$.ajax({
 			url: jsonbackend_write,
