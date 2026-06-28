@@ -164,7 +164,7 @@ function pollUnifi(){
 		);
 		$set_debug_mode = $unifi_connection->set_debug(false);
 		LOGDEB("Attempting login...");
-
+		
 		// --- NEUE RETRY-LOGIK START ---
 		$maxRetries = 3;
 		$retryDelay = 5; // Wartezeit in Sekunden zwischen den Versuchen
@@ -185,7 +185,7 @@ function pollUnifi(){
 			}
 		}
 		// --- NEUE RETRY-LOGIK ENDE ---
-
+		
 		LOGDEB("Login response received");
 		
 		if ($loginresults != true) {
@@ -351,21 +351,21 @@ function pollUnifi(){
 
 			// --- NEU: Basis für das MQTT Topic ermitteln ---
 			$topicBaseSetting = isset($config->Main->mqtt_topic_base) ? $config->Main->mqtt_topic_base : 'mac';
-			$clientTopicBase = $mqttFriendlyMac; // Standard ist MAC			
-
+			$clientTopicBase = $mqttFriendlyMac; // Standard ist MAC
+			
 			// Wenn Name gewünscht ist und auch einer existiert (-1 heißt im Plugin: nicht gefunden)
 			if ($topicBaseSetting === 'name' && $mqttFriendlyName !== -1 && $mqttFriendlyName !== "") {
 				// Leerzeichen und Sonderzeichen für ein sicheres MQTT-Topic durch Minus ersetzen
 				$clientTopicBase = preg_replace('/[^a-zA-Z0-9_-]/', '-', $mqttFriendlyName);
 			}
-			
+
 			//MQTT transmission
 			if ($online === true) {
 				LOGINF("Client ". $mac. " is online");
 				$mqtt->publish("wifi-presence-unifi/clients/" . $clientTopicBase . "/online", 1, 0, 1);
 			} else {
 				LOGINF("Client ". $mac. " is offline");
-				$mqtt->publish("wifi-presence-unifi/clients/" . $clientTopicBase . "/online", 0, 0, 1);
+				$mqtt->publish("wifi-presence-unifi/clients/" . $clientTopicBase . "/online", 0, 0, 1); 
 			}
 
 			$mqtt->publish("wifi-presence-unifi/clients/" . $clientTopicBase . "/powersave_enabled", $mqttFriendlyPowersaveEnabled, 0, 1); 
