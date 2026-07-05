@@ -8,3 +8,8 @@ Das vorhandene Plugin von Ronald Marske benötigt den Node Express Server, welch
 
 Dieses Plugin arbeitet mit einem Intervall. Es ruft alle 60 Sekunden die verbundenen Geräte per API bei einem UniFi Controller ab. So entsteht zwar ein Zeitversatz und auch die Performance könnte besser sein, aber auf der anderen Seite ist das Plugin so besonders robust, leichtgewichtig und zukunftssicher. 
 
+## Danksagung
+
+Die Kommunikation mit dem UniFi Controller erfolgt über den UniFi API Client von Art of WiFi (https://github.com/Art-of-WiFi/UniFi-API-client), der unter der MIT-Lizenz steht. Die Datei liegt unter webfrontend/htmlauth/include/Client.php, die zugehörige Lizenz unter webfrontend/htmlauth/include/LICENSE.md.
+
+
