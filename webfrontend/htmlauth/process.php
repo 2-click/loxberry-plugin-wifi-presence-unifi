@@ -170,6 +170,19 @@ function getClientsAsJson() {
 	if ($loginresults == true) {
 		// Get all known clients (including offline ones)
 		$clients = $unifi_connection->stat_allusers();
+
+		// Get the currently connected clients so we can flag each device online or offline.
+		// This mirrors the poll logic: a client counts as online when it is connected with uptime > 1.
+		$onlineMacs = [];
+		$currentClients = $unifi_connection->list_clients();
+		if (is_array($currentClients)) {
+			foreach ($currentClients as $currentClient) {
+				if (isset($currentClient->mac) && isset($currentClient->uptime) && $currentClient->uptime > 1) {
+					$onlineMacs[$currentClient->mac] = true;
+				}
+			}
+		}
+
 		$resultList = [];
 
 		if (is_array($clients)) {
@@ -187,6 +200,7 @@ function getClientsAsJson() {
 				$resultList[] = [
 					"mac" => $client->mac,
 					"name" => $name,
+					"online" => isset($onlineMacs[$client->mac]),
 					"sortName" => strtolower($name)
 				];
 			}

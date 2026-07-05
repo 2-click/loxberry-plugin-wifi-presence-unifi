@@ -178,8 +178,11 @@ textarea {
 			} else {
 				clients.forEach(function(client) {
 					var isChecked = window.savedMacAddresses.includes(client.mac) ? 'checked' : '';
+					var dotColor = client.online ? '#4caf50' : '#e53935';
+					var dotTitle = client.online ? 'online' : 'offline';
 					html += '<div style="margin-bottom: 5px; display: flex; align-items: center;">';
 					html += '<input type="checkbox" name="macaddress_checkbox" value="' + client.mac + '" id="mac_' + client.mac + '" ' + isChecked + ' style="margin-right: 10px; width: 20px; height: 20px;">';
+					html += '<span title="' + dotTitle + '" style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background-color: ' + dotColor + '; margin-right: 8px; flex-shrink: 0;"></span>';
 					html += '<label for="mac_' + client.mac + '" style="margin: 0; font-weight: normal; cursor: pointer;"><strong>' + client.name + '</strong> <span style="font-size: 0.8em; color: #888;">(' + client.mac + ')</span></label>';
 					html += '</div>';
 				});
