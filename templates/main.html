@@ -29,12 +29,6 @@
 		<input name="sitename" id="sitename" type="text" placeholder="Enter Sitename"
 			style="width: 100%; padding: 10px; margin: 10px 0;" />
 
-		<label for="version">
-			<TMPL_VAR SETTINGS.VERSION>
-		</label>
-		<input name="version" id="version" type="text" placeholder="Enter Version"
-			style="width: 100%; padding: 10px; margin: 10px 0;" />
-			
 		<label for="mqtt_topic_base">
 			<TMPL_VAR SETTINGS.MQTT_TOPIC_BASE>
 		</label>
@@ -50,6 +44,15 @@
 			<i style="color: #666;"><TMPL_VAR SETTINGS.DEVICES_HINT></i>
 		</div>
 		<button class="ui-btn ui-btn-icon-right" id="fetch_devices" style="margin-top: 10px; background-color: #e0e0e0;"><TMPL_VAR SETTINGS.DEVICES_FETCH_BTN></button>
+
+		<details style="margin-top: 20px;">
+			<summary style="cursor: pointer; color: #555; padding: 5px 0;"><TMPL_VAR SETTINGS.ADVANCED_SETTINGS></summary>
+			<label for="version">
+				<TMPL_VAR SETTINGS.VERSION>
+			</label>
+			<input name="version" id="version" type="text" placeholder="<TMPL_VAR SETTINGS.VERSION_PLACEHOLDER>"
+				style="width: 100%; padding: 10px; margin: 10px 0;" />
+		</details>
 	</div>
 
 	<p name="status" id="status" style="color: red; text-align: center;"></p>

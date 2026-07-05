@@ -4,7 +4,7 @@
 		"username": "",
 		"password": "",
 		"sitename": "default",
-		"version": "4.6.6",
+		"version": "",
 		"mqtt_topic_base": "mac",
 		"macaddresses": []
 	}

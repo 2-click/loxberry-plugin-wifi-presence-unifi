@@ -55,6 +55,23 @@ function getconfigasjson($output = false){
 	}
 }
 
+// Create a UniFi API client from the saved config.
+// The controller version is optional: when it is left empty in the advanced settings,
+// the client auto-detects the controller type at login (regular controller vs UniFi OS).
+function createUnifiClient($config) {
+	$version = isset($config->Main->version) ? trim($config->Main->version) : "";
+	$clientArgs = [
+		$config->Main->username,
+		$config->Main->password,
+		$config->Main->url,
+		$config->Main->sitename,
+	];
+	if ($version !== "") {
+		$clientArgs[] = $version;
+	}
+	return new UniFi_API\Client(...$clientArgs);
+}
+
 // Fetch all known clients from the UniFi controller and return them as JSON for the UI device picker
 function getClientsAsJson() {
 	// UI-facing texts are translated, load the plugin language file
@@ -67,10 +84,7 @@ function getClientsAsJson() {
 		return;
 	}
 
-	$unifi_connection = new UniFi_API\Client(
-		$config->Main->username, $config->Main->password, 
-		$config->Main->url, $config->Main->sitename, $config->Main->version
-	);
+	$unifi_connection = createUnifiClient($config);
 	
 	$unifi_connection->set_debug(false);
 	$loginresults = $unifi_connection->login();
@@ -155,13 +169,7 @@ function pollUnifi(){
 
 
 		// Initialize the UniFi API connection class and log in to the controller and do our thing
-		$unifi_connection = new UniFi_API\Client(
-			$config->Main->username,
-			$config->Main->password, 
-			$config->Main->url, 
-			$config->Main->sitename, 
-			$config->Main->version
-		);
+		$unifi_connection = createUnifiClient($config);
 		$set_debug_mode = $unifi_connection->set_debug(false);
 		LOGDEB("Attempting login...");
 		
