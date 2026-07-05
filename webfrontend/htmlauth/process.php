@@ -32,6 +32,9 @@ switch ($requestedAction){
 	case "getclients":
 		getClientsAsJson();
 		break;
+	case "getsites":
+		getSitesAsJson();
+		break;
 	default:
 		http_response_code(404);
 		notify(LBPCONFIGDIR, "wifi-presence-unifi", "process.php has been called without parameter.", "error");
@@ -55,16 +58,17 @@ function getconfigasjson($output = false){
 	}
 }
 
-// Create a UniFi API client from the saved config.
-// The controller version is optional: when it is left empty in the advanced settings,
-// the client auto-detects the controller type at login (regular controller vs UniFi OS).
-function createUnifiClient($config) {
-	$version = isset($config->Main->version) ? trim($config->Main->version) : "";
+// Build a UniFi API client from a set of connection settings (associative array).
+// The controller version is optional: when it is left empty, the client auto-detects
+// the controller type at login (regular controller vs UniFi OS).
+function makeUnifiClient($settings) {
+	$version = isset($settings["version"]) ? trim($settings["version"]) : "";
+	$sitename = (isset($settings["sitename"]) && trim($settings["sitename"]) !== "") ? $settings["sitename"] : "default";
 	$clientArgs = [
-		$config->Main->username,
-		$config->Main->password,
-		$config->Main->url,
-		$config->Main->sitename,
+		$settings["username"],
+		$settings["password"],
+		$settings["url"],
+		$sitename,
 	];
 	if ($version !== "") {
 		$clientArgs[] = $version;
@@ -72,20 +76,94 @@ function createUnifiClient($config) {
 	return new UniFi_API\Client(...$clientArgs);
 }
 
+// Create a UniFi API client from the saved config, used by the cron based poll.
+function createUnifiClient($config) {
+	return makeUnifiClient([
+		"username" => $config->Main->username,
+		"password" => $config->Main->password,
+		"url"      => $config->Main->url,
+		"sitename" => isset($config->Main->sitename) ? $config->Main->sitename : "",
+		"version"  => isset($config->Main->version) ? $config->Main->version : "",
+	]);
+}
+
+// Resolve the connection settings from the posted form, falling back to the saved config.
+// This lets the settings page list sites and devices before the config is saved.
+function resolveConnectionSettings($config) {
+	$main = isset($config->Main) ? $config->Main : new stdClass();
+	return [
+		"url"      => isset($_POST["url"])      ? trim($_POST["url"])      : (isset($main->url)      ? $main->url      : ""),
+		"username" => isset($_POST["username"]) ? trim($_POST["username"]) : (isset($main->username) ? $main->username : ""),
+		"password" => isset($_POST["password"]) ? $_POST["password"]       : (isset($main->password) ? $main->password : ""),
+		"sitename" => isset($_POST["sitename"]) ? trim($_POST["sitename"]) : (isset($main->sitename) ? $main->sitename : ""),
+		"version"  => isset($_POST["version"])  ? trim($_POST["version"])  : (isset($main->version)  ? $main->version  : ""),
+	];
+}
+
+// Fetch the list of sites available to the account and return them as JSON for the site dropdown
+function getSitesAsJson() {
+	// UI-facing texts are translated, load the plugin language file
+	$L = LBSystem::readlanguage("language.ini");
+	$config = getconfigasjson()->slave;
+	$settings = resolveConnectionSettings($config);
+
+	if($settings["username"] === "" || $settings["password"] === "" || $settings["url"] === ""){
+		http_response_code(400);
+		echo json_encode(["error" => $L['SETTINGSJS.ERROR_NO_CREDENTIALS'] ?? "Please enter your credentials first."]);
+		return;
+	}
+
+	// The site context is irrelevant when listing sites, so use the default
+	$settings["sitename"] = "default";
+	$unifi_connection = makeUnifiClient($settings);
+	$unifi_connection->set_debug(false);
+	$loginresults = $unifi_connection->login();
+
+	if ($loginresults == true) {
+		$sites = $unifi_connection->list_sites();
+		$resultList = [];
+
+		if (is_array($sites)) {
+			foreach ($sites as $site) {
+				if (!isset($site->name)) {
+					continue;
+				}
+				$resultList[] = [
+					"name" => $site->name,                                   // internal site id used by the API
+					"desc" => isset($site->desc) ? $site->desc : $site->name // human readable name shown in the dropdown
+				];
+			}
+
+			// Sort alphabetically by the human readable name
+			usort($resultList, function($a, $b) {
+				return strcasecmp($a["desc"], $b["desc"]);
+			});
+		}
+
+		header('Content-Type: application/json');
+		echo json_encode($resultList);
+	} else {
+		http_response_code(500);
+		echo json_encode(["error" => $L['SETTINGSJS.ERROR_LOGIN_FAILED'] ?? "Login failed. Are the credentials correct?"]);
+	}
+}
+
+
 // Fetch all known clients from the UniFi controller and return them as JSON for the UI device picker
 function getClientsAsJson() {
 	// UI-facing texts are translated, load the plugin language file
 	$L = LBSystem::readlanguage("language.ini");
 	$config = getconfigasjson()->slave;
+	$settings = resolveConnectionSettings($config);
 
-	if(!isset($config->Main->username) || !isset($config->Main->password) || !isset($config->Main->url)){
+	if($settings["username"] === "" || $settings["password"] === "" || $settings["url"] === ""){
 		http_response_code(400);
-		echo json_encode(["error" => $L['SETTINGSJS.ERROR_NO_CREDENTIALS'] ?? "Please save your credentials first."]);
+		echo json_encode(["error" => $L['SETTINGSJS.ERROR_NO_CREDENTIALS'] ?? "Please enter your credentials first."]);
 		return;
 	}
 
-	$unifi_connection = createUnifiClient($config);
-	
+	$unifi_connection = makeUnifiClient($settings);
+
 	$unifi_connection->set_debug(false);
 	$loginresults = $unifi_connection->login();
 	

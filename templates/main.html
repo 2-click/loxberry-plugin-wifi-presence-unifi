@@ -23,28 +23,6 @@
 		<input name="password" id="password" type="password" placeholder="Enter Password"
 			style="width: 100%; padding: 10px; margin: 10px 0;" />
 
-		<label for="sitename">
-			<TMPL_VAR SETTINGS.SITENAME>
-		</label>
-		<input name="sitename" id="sitename" type="text" placeholder="Enter Sitename"
-			style="width: 100%; padding: 10px; margin: 10px 0;" />
-
-		<label for="mqtt_topic_base">
-			<TMPL_VAR SETTINGS.MQTT_TOPIC_BASE>
-		</label>
-		<select name="mqtt_topic_base" id="mqtt_topic_base" style="width: 100%; padding: 10px; margin: 10px 0;">
-			<option value="mac"><TMPL_VAR SETTINGS.MQTT_TOPIC_MAC></option>
-			<option value="name"><TMPL_VAR SETTINGS.MQTT_TOPIC_NAME></option>
-		</select>		
-			
-		<label>
-			<TMPL_VAR SETTINGS.DEVICES_LABEL>
-		</label>
-		<div id="device_list_container" style="border: 1px solid #ccc; padding: 10px; max-height: 350px; overflow-y: auto; background: #f9f9f9; border-radius: 5px;">
-			<i style="color: #666;"><TMPL_VAR SETTINGS.DEVICES_HINT></i>
-		</div>
-		<button class="ui-btn ui-btn-icon-right" id="fetch_devices" style="margin-top: 10px; background-color: #e0e0e0;"><TMPL_VAR SETTINGS.DEVICES_FETCH_BTN></button>
-
 		<details style="margin-top: 20px;">
 			<summary style="cursor: pointer; color: #555; padding: 5px 0;"><TMPL_VAR SETTINGS.ADVANCED_SETTINGS></summary>
 			<label for="version">
@@ -53,11 +31,38 @@
 			<input name="version" id="version" type="text" placeholder="<TMPL_VAR SETTINGS.VERSION_PLACEHOLDER>"
 				style="width: 100%; padding: 10px; margin: 10px 0;" />
 		</details>
+
+		<button class="ui-btn" id="connect" style="margin-top: 15px;"><TMPL_VAR SETTINGS.CONNECT_BTN></button>
+
+		<div id="post_connect" style="display: none; margin-top: 10px;">
+			<label for="sitename">
+				<TMPL_VAR SETTINGS.SITENAME>
+			</label>
+			<select name="sitename" id="sitename" data-role="none"
+				style="width: 100%; padding: 10px; margin: 10px 0;"></select>
+
+			<label for="mqtt_topic_base">
+				<TMPL_VAR SETTINGS.MQTT_TOPIC_BASE>
+			</label>
+			<select name="mqtt_topic_base" id="mqtt_topic_base" data-role="none"
+				style="width: 100%; padding: 10px; margin: 10px 0;">
+				<option value="mac"><TMPL_VAR SETTINGS.MQTT_TOPIC_MAC></option>
+				<option value="name"><TMPL_VAR SETTINGS.MQTT_TOPIC_NAME></option>
+			</select>
+
+			<label>
+				<TMPL_VAR SETTINGS.DEVICES_LABEL>
+			</label>
+			<div id="device_list_container" style="border: 1px solid #ccc; padding: 10px; max-height: 350px; overflow-y: auto; background: #f9f9f9; border-radius: 5px;">
+				<i style="color: #666;"><TMPL_VAR SETTINGS.DEVICES_HINT></i>
+			</div>
+			<button class="ui-btn ui-btn-icon-right" id="fetch_devices" style="margin-top: 10px; background-color: #e0e0e0;"><TMPL_VAR SETTINGS.DEVICES_FETCH_BTN></button>
+		</div>
 	</div>
 
 	<p name="status" id="status" style="color: red; text-align: center;"></p>
 </form>
- 
+
 <br />
 <div style="display:flex;align-items:center;justify-content:center;">
 	<button class="ui-btn" id="saveaction" data-inline="true"><TMPL_VAR SETTINGS.SAVESETTINGS></button>
@@ -73,8 +78,8 @@ textarea {
   font-size: 15px !important; line-height: 27px !important;
   padding-top: 0px !important;
   padding-bottom: 0px !important;
-  margin-top: 8px !important; 
-  margin-bottom: 8px !important; 
+  margin-top: 8px !important;
+  margin-bottom: 8px !important;
 }
 textarea {
   border: none; outline: none;
@@ -92,7 +97,11 @@ textarea {
 	var lbversion = '<TMPL_VAR LBVERSION>';
 	var jsonbackend_read = '/admin/system/ajax/ajax-generic.php?file=LBPCONFIG/wifi-presence-unifi/config.json&section=Main&read';
 	var jsonbackend_write = '/admin/system/ajax/ajax-generic.php?file=LBPCONFIG/wifi-presence-unifi/config.json&section=Main&replace';
-	
+
+	// Remember the saved selection so we can restore it after loading fresh data from the controller
+	window.savedMacAddresses = [];
+	var savedSitename = '';
+
 	$(document).ready(function () {
 		// Read config
 		$.ajax({
@@ -106,17 +115,24 @@ textarea {
 				$('#url').val(response.url);
 				$('#username').val(response.username);
 				$('#password').val(response.password);
-				$('#sitename').val(response.sitename);
 				$('#version').val(response.version);
-				// Set the value and force jQuery Mobile to refresh the display (.trigger('change'))
+
 				if (response.mqtt_topic_base) {
-					$('#mqtt_topic_base').val(response.mqtt_topic_base).trigger('change');
+					$('#mqtt_topic_base').val(response.mqtt_topic_base);
 				} else {
-					$('#mqtt_topic_base').val('mac').trigger('change');
+					$('#mqtt_topic_base').val('mac');
 				}
 
-				// Store the saved MACs in a global variable so we can tick them when the list is reloaded
+				// Store the saved values so we can restore them when the lists are reloaded
 				window.savedMacAddresses = response.macaddresses && Array.isArray(response.macaddresses) ? response.macaddresses : [];
+				savedSitename = response.sitename ? response.sitename : '';
+
+				// If a site is already configured, reveal the site and device section right away.
+				// The saved site is shown as the current option until the user connects and reloads the list.
+				if (savedSitename !== '') {
+					$('#sitename').append(new Option(savedSitename, savedSitename, true, true));
+					$('#post_connect').show();
+				}
 
 				if (window.savedMacAddresses.length > 0) {
 					$('#device_list_container').html('<i style="color: #666;">' + window.savedMacAddresses.length + ' <TMPL_VAR SETTINGSJS.DEVICES_SAVED></i>');
@@ -130,14 +146,29 @@ textarea {
 	});
 
 
-	$("#fetch_devices").click(function (e) {
-		e.preventDefault();
+	// Collect the current credentials from the form for the backend calls
+	function currentCredentials() {
+		return {
+			url: $('#url').val(),
+			username: $('#username').val(),
+			password: $('#password').val(),
+			version: $('#version').val()
+		};
+	}
+
+
+	// Load the device list for the currently selected site
+	function fetchDevices() {
 		$("#fetch_devices").text("<TMPL_VAR SETTINGSJS.DEVICES_LOADING>").attr("disabled", true);
 		$("#device_list_container").html('<i><TMPL_VAR SETTINGSJS.DEVICES_CONNECTING></i>');
 
+		var data = currentCredentials();
+		data.action = 'getclients';
+		data.sitename = $('#sitename').val();
+
 		$.ajax('process.php', {
 			type: 'POST',
-			data: { action: 'getclients' },
+			data: data,
 			dataType: 'json'
 		})
 		.done(function(clients) {
@@ -161,14 +192,74 @@ textarea {
 			$("#device_list_container").html('<i style="color: red;">' + errorMsg + '</i>');
 			$("#fetch_devices").text("<TMPL_VAR SETTINGSJS.DEVICES_RETRY>").attr("disabled", false);
 		});
-	});		
+	}
+
+
+	// Connect to the controller, load the available sites and then the devices for the selected site
+	$("#connect").click(function (e) {
+		e.preventDefault();
+		$("#connect").attr("disabled", true);
+		$("#status").css("color", "").text("<TMPL_VAR SETTINGSJS.DEVICES_CONNECTING>");
+
+		var data = currentCredentials();
+		data.action = 'getsites';
+
+		$.ajax('process.php', {
+			type: 'POST',
+			data: data,
+			dataType: 'json'
+		})
+		.done(function(sites) {
+			if(!sites || sites.length === 0) {
+				$("#status").css("color", "red").text("<TMPL_VAR SETTINGSJS.SITES_NOTFOUND>");
+				$("#connect").attr("disabled", false);
+				return;
+			}
+
+			var $site = $('#sitename');
+			$site.empty();
+			sites.forEach(function(site) {
+				$site.append(new Option(site.desc, site.name));
+			});
+
+			// Keep the previously saved site selected if it is still available
+			if (savedSitename !== '') {
+				$site.val(savedSitename);
+			}
+
+			$("#status").text('');
+			$("#post_connect").show();
+			$("#connect").attr("disabled", false);
+
+			// Load the devices for the currently selected site
+			fetchDevices();
+		})
+		.fail(function(xhr) {
+			var errorMsg = xhr.responseJSON && xhr.responseJSON.error ? xhr.responseJSON.error : "<TMPL_VAR SETTINGSJS.HINT_GENERAL_ERROR>";
+			$("#status").css("color", "red").text(errorMsg);
+			$("#connect").attr("disabled", false);
+		});
+	});
+
+
+	// Reload the device list when the selected site changes
+	$("#sitename").change(function () {
+		fetchDevices();
+	});
+
+
+	// Manual reload of the device list
+	$("#fetch_devices").click(function (e) {
+		e.preventDefault();
+		fetchDevices();
+	});
 
 
 	$("#saveaction").click(function (e) {
 		e.preventDefault(); // Prevent the default form submission
 
 		var formData = new FormData(document.getElementById('WifiPresenceUnifiSettings'));
-		
+
 		// Remove any checkbox values the form may have sent automatically
 		formData.delete('macaddress_checkbox');
 		formData.delete('macaddresses[]');
@@ -209,8 +300,8 @@ textarea {
 
 	$("#poll").click(function(){
 		$("#poll").attr("disabled", true);
-		
-		$.ajax('process.php', { 
+
+		$.ajax('process.php', {
 			type: 'POST',
 			data: {action: 'poll'}
 		})
@@ -219,6 +310,6 @@ textarea {
 			$("#poll").attr("disabled", false);
 		});
 	});
-	
-	
+
+
 </script>
