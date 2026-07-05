@@ -14,13 +14,14 @@ LOGSTART("Script called.");
 
 //Decide for and run function
 $requestedAction = "";
-if(isset($_POST["action"])){
+if (php_sapi_name() === "cli") {
+	LOGINF("Started from Cron.");
+	if (isset($argv[1])) {
+		$requestedAction = $argv[1];
+	}
+} elseif (isset($_POST["action"])) {
 	LOGINF("Started from HTTP.");
 	$requestedAction = $_POST["action"];
-}
-if(isset($argv)){
-	LOGINF("Started from Cron.");
-	$requestedAction = $argv[1];
 }
 
 switch ($requestedAction){
@@ -210,7 +211,7 @@ function pollUnifi(){
 		$clientHistory = $unifi_connection->stat_allusers();
 
 		if (is_array($clientHistory)) {
-			LOGINF("Received " . count($clients) . " clients (history) from unifi");
+			LOGINF("Received " . count($clientHistory) . " clients (history) from unifi");
 		} else {
 			LOGDEB("stat_allusers returned unexpected result");
 		}
@@ -218,7 +219,7 @@ function pollUnifi(){
 		// Get all UniFi devices (APs and switches)
 		LOGDEB("Fetching UniFi devices...");
 		$aps_array = $unifi_connection->list_aps();
-		if (is_array($clients)) {
+		if (is_array($aps_array)) {
 			LOGINF("Received " . count($aps_array) . " devices from unifi");
 		} else {
 			LOGERR("list_aps returned unexpected result");
@@ -229,6 +230,10 @@ function pollUnifi(){
 		LOGDEB("Starting client loop");
 		$uplinkMacList = [];
 		foreach ($config->Main->macaddresses as $mac) {
+			// Skip empty entries (the UI stores an empty placeholder when no device is selected)
+			if (trim($mac) === "") {
+				continue;
+			}
 			LOGINF("Searching ". $mac. " in unifi API results");
 			$deviceFound = false;
 			$foundClient = null;
@@ -256,96 +261,98 @@ function pollUnifi(){
 
 			//prepare some variables for mqtt transmission
 			$mqttFriendlyMac = str_replace(':', '-', $mac);
-			if ($foundClient->powersave_enabled) {
+			if (!empty($foundClient->powersave_enabled)) {
 				$mqttFriendlyPowersaveEnabled = 1;
 			} else {
 				$mqttFriendlyPowersaveEnabled = 0;
 			}
-			if ($foundClient->ap_mac !== null) {
+			if (isset($foundClient->ap_mac)) {
 				$mqttFriendlyApMac = str_replace(':', '-', $foundClient->ap_mac);
 			} else {
-				$apMac = "";
+				$mqttFriendlyApMac = "";
 			}
-			if ($foundClient->disconnect_timestamp !== null) {
+			if (isset($foundClient->disconnect_timestamp)) {
 				$mqttFriendlyLastDisconnectAgo = time() - $foundClient->disconnect_timestamp;
 			} else {
 				$mqttFriendlyLastDisconnectAgo = -1;
 			}
 
-			if ($foundClient->last_seen !== null) {
+			if (isset($foundClient->last_seen)) {
 				$mqttFriendlyLastSeenAgo = time() - $foundClient->last_seen;
 			} else {
 				$mqttFriendlyLastSeenAgo = -1;
 			}
 
-			if ($foundClient->uptime !== null) {
+			if (isset($foundClient->uptime)) {
 				$mqttFriendlyUptime = $foundClient->uptime;
 			} else {
 				$mqttFriendlyUptime = -1;
 			}
 
-			if ($foundClient->assoc_time !== null) {
+			if (isset($foundClient->assoc_time)) {
 				$mqttFriendlyAssocTimeAgo = time() - $foundClient->assoc_time;
 			} else {
 				$mqttFriendlyAssocTimeAgo = -1;
 			}
 
-			if ($foundClient->latest_assoc_time !== null) {
+			if (isset($foundClient->latest_assoc_time)) {
 				$mqttFriendlyLatestAssocTimeAgo = time() - $foundClient->latest_assoc_time;
 			} else {
 				$mqttFriendlyLatestAssocTimeAgo = -1;
 			}
 
-			if ($foundClient->_uptime_by_uap !== null) {
+			if (isset($foundClient->_uptime_by_uap)) {
 				$mqttFriendlyUptimeByUAP = $foundClient->_uptime_by_uap;
 			} else {
 				$mqttFriendlyUptimeByUAP = -1;
 			}
 
-			if ($foundClient->hostname !== null) {
+			if (isset($foundClient->hostname)) {
 				$mqttFriendlyHostname = $foundClient->hostname;
 			} else {
 				$mqttFriendlyHostname = -1;
 			}
 
-			if ($foundClient->name !== null) {
+			if (isset($foundClient->name)) {
 				$mqttFriendlyName = $foundClient->name;
 			} else {
 				$mqttFriendlyName = -1;
 			}
 
-			if ($foundClient->essid !== null) {
+			if (isset($foundClient->essid)) {
 				$mqttFriendlyEssid = $foundClient->essid;
 			} else {
 				$mqttFriendlyEssid = -1;
 			}
 
-			if ($foundClient->ip !== null) {
+			if (isset($foundClient->ip)) {
 				$mqttFriendlyIp = $foundClient->ip;
 			} else {
 				$mqttFriendlyIp = -1;
 			}
 			
-			if ($foundClient->satisfaction !== null) {
+			if (isset($foundClient->satisfaction)) {
 				$mqttFriendlySatisfaction = $foundClient->satisfaction;
 			} else {
 				$mqttFriendlySatisfaction = -1;
 			}
 
-			if ($foundClient->signal !== null) {
+			if (isset($foundClient->signal)) {
 				$mqttFriendlySignal = $foundClient->signal;
 			} else {
 				$mqttFriendlySignal = -1;
 			}
 
-			LOGDEB("Looking up uplink ap name for device " . $foundClient->ap_mac);
-			foreach ($aps_array as $ap) {
-				if (isset($ap->ethernet_table[0]->mac) && $ap->ethernet_table[0]->mac === $foundClient->ap_mac) {
-					$mqttFriendlyAPName = $ap->name;
-					LOGDEB("Uplink ap name for device " . $foundClient->ap_mac . " is " . $mqttFriendlyAPName );
-					break;
-				} else {
-					$mqttFriendlyAPName = "-";
+			$clientApMac = isset($foundClient->ap_mac) ? $foundClient->ap_mac : null;
+			$mqttFriendlyAPName = "-";
+			if ($clientApMac !== null) {
+				LOGDEB("Looking up uplink ap name for device " . $clientApMac);
+				foreach ($aps_array as $ap) {
+					if (isset($ap->ethernet_table[0]->mac) && $ap->ethernet_table[0]->mac === $clientApMac) {
+						$mqttFriendlyAPName = $ap->name;
+						LOGDEB("Uplink ap name for device " . $clientApMac . " is " . $mqttFriendlyAPName);
+						break;
+					}
 				}
 			}
 
