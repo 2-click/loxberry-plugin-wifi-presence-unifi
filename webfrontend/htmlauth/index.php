@@ -1,7 +1,7 @@
 <?php
 require_once "loxberry_web.php";
 
-// Header mit Titel und Hilfe
+// Header with title and help
 $L = LBSystem::readlanguage("language.ini");
 LBWeb::lbheader("Wifi Presence UniFi", "", "");
 

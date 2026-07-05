@@ -29,11 +29,9 @@ switch ($requestedAction){
 		pollUnifi();
 		LOGEND("Processing finished.");
 		break;
-	// --- NEUER BLOCK FUER CLIENTS START ---
 	case "getclients":
 		getClientsAsJson();
 		break;
-	// --- NEUER BLOCK FUER CLIENTS ENDE ---
 	default:
 		http_response_code(404);
 		notify(LBPCONFIGDIR, "wifi-presence-unifi", "process.php has been called without parameter.", "error");
@@ -57,13 +55,15 @@ function getconfigasjson($output = false){
 	}
 }
 
-// --- NEUE FUNKTION ZUM ABRUFEN DER GERÄTE ---
+// Fetch all known clients from the UniFi controller and return them as JSON for the UI device picker
 function getClientsAsJson() {
+	// UI-facing texts are translated, load the plugin language file
+	$L = LBSystem::readlanguage("language.ini");
 	$config = getconfigasjson()->slave;
-	
+
 	if(!isset($config->Main->username) || !isset($config->Main->password) || !isset($config->Main->url)){
 		http_response_code(400);
-		echo json_encode(["error" => "Bitte zuerst Zugangsdaten speichern."]);
+		echo json_encode(["error" => $L['SETTINGSJS.ERROR_NO_CREDENTIALS'] ?? "Please save your credentials first."]);
 		return;
 	}
 
@@ -76,31 +76,30 @@ function getClientsAsJson() {
 	$loginresults = $unifi_connection->login();
 	
 	if ($loginresults == true) {
-		// Hole alle bekannten Geräte (auch offline)
-		$clients = $unifi_connection->stat_allusers(); 
+		// Get all known clients (including offline ones)
+		$clients = $unifi_connection->stat_allusers();
 		$resultList = [];
-		
+
 		if (is_array($clients)) {
-			// Zeitstempel für "vor 30 Tagen" berechnen
+			// Timestamp for "30 days ago"
 			$thirtyDaysAgo = time() - (30 * 24 * 60 * 60);
 
 			foreach($clients as $client) {
-				// Überspringe das Gerät, wenn es seit über 30 Tagen nicht mehr gesehen wurde
-				// (Oder wenn gar kein Zeitstempel existiert)
+				// Skip clients not seen within the last 30 days (or without any timestamp)
 				if (!isset($client->last_seen) || $client->last_seen < $thirtyDaysAgo) {
-					continue; 
+					continue;
 				}
 
-				// Name oder Hostname oder (als Fallback) die MAC-Adresse
+				// Prefer name, then hostname, then MAC address as fallback
 				$name = isset($client->name) ? $client->name : (isset($client->hostname) ? $client->hostname : $client->mac);
 				$resultList[] = [
-					"mac" => $client->mac, 
+					"mac" => $client->mac,
 					"name" => $name,
 					"sortName" => strtolower($name)
 				];
 			}
-			
-			// Alphabetisch sortieren
+
+			// Sort alphabetically
 			usort($resultList, function($a, $b) {
 				return strcmp($a['sortName'], $b['sortName']);
 			});
@@ -109,7 +108,7 @@ function getClientsAsJson() {
 		echo json_encode($resultList);
 	} else {
 		http_response_code(500);
-		echo json_encode(["error" => "Login fehlgeschlagen. Stimmen die Zugangsdaten?"]);
+		echo json_encode(["error" => $L['SETTINGSJS.ERROR_LOGIN_FAILED'] ?? "Login failed. Are the credentials correct?"]);
 	}
 }
 
@@ -166,27 +165,26 @@ function pollUnifi(){
 		$set_debug_mode = $unifi_connection->set_debug(false);
 		LOGDEB("Attempting login...");
 		
-		// --- NEUE RETRY-LOGIK START ---
+		// Retry login a few times before giving up
 		$maxRetries = 3;
-		$retryDelay = 5; // Wartezeit in Sekunden zwischen den Versuchen
+		$retryDelay = 5; // Wait time in seconds between attempts
 		$loginresults = false;
 
 		for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
 			$loginresults = $unifi_connection->login();
-			
+
 			if ($loginresults == true) {
-				// Login war erfolgreich, wir können die Schleife abbrechen
-				break; 
+				// Login succeeded, stop retrying
+				break;
 			}
 
-			// Wenn der Login fehlschlug und es noch nicht der letzte Versuch war
+			// Login failed and this was not the last attempt yet
 			if ($attempt < $maxRetries) {
-				LOGWARN("Login to unifi failed (Versuch $attempt von $maxRetries). Warte $retryDelay Sekunden...");
+				LOGWARN("Login to unifi failed (attempt $attempt of $maxRetries). Waiting $retryDelay seconds...");
 				sleep($retryDelay);
 			}
 		}
-		// --- NEUE RETRY-LOGIK ENDE ---
-		
+
 		LOGDEB("Login response received");
 		
 		if ($loginresults != true) {
@@ -205,15 +203,6 @@ function pollUnifi(){
 			LOGINF("Received ". count($clients) . " clients from unifi");
 		} else {
 			LOGDEB("list_clients returned unexpected result");
-		}
-
-		// Get all clients, online and offline
-		$clientHistory = $unifi_connection->stat_allusers();
-
-		if (is_array($clientHistory)) {
-			LOGINF("Received " . count($clientHistory) . " clients (history) from unifi");
-		} else {
-			LOGDEB("stat_allusers returned unexpected result");
 		}
 
 		// Get all UniFi devices (APs and switches)
@@ -356,13 +345,13 @@ function pollUnifi(){
 				}
 			}
 
-			// --- NEU: Basis für das MQTT Topic ermitteln ---
+			// Determine the base for the MQTT topic
 			$topicBaseSetting = isset($config->Main->mqtt_topic_base) ? $config->Main->mqtt_topic_base : 'mac';
-			$clientTopicBase = $mqttFriendlyMac; // Standard ist MAC
-			
-			// Wenn Name gewünscht ist und auch einer existiert (-1 heißt im Plugin: nicht gefunden)
+			$clientTopicBase = $mqttFriendlyMac; // Default is MAC
+
+			// Use the name if requested and one exists (-1 means "not found" in this plugin)
 			if ($topicBaseSetting === 'name' && $mqttFriendlyName !== -1 && $mqttFriendlyName !== "") {
-				// Leerzeichen und Sonderzeichen für ein sicheres MQTT-Topic durch Minus ersetzen
+				// Replace spaces and special characters with a dash for a safe MQTT topic
 				$clientTopicBase = preg_replace('/[^a-zA-Z0-9_-]/', '-', $mqttFriendlyName);
 			}
 
@@ -402,7 +391,7 @@ function pollUnifi(){
 				$mqttFriendlyName = $ap->name;
 				$mqttFriendlyClientCount = $ap->num_sta;
 				
-				// --- NEU: Basis für AP Topics ermitteln ---
+				// Determine the base for the AP topics
 				$topicBaseSetting = isset($config->Main->mqtt_topic_base) ? $config->Main->mqtt_topic_base : 'mac';
 				$deviceTopicBase = $mqttFriendlyMac;
 				if ($topicBaseSetting === 'name' && !empty($mqttFriendlyName)) {

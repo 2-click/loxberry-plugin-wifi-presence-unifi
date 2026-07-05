@@ -97,7 +97,7 @@ textarea {
 			type: 'POST',
 			dataType: 'json',
 			success: function (response) {
-				console.log(response); // Überprüfen der Struktur des response-Objekts
+				console.log(response); // Inspect the structure of the response object
 
 				// Fill the form fields with the corresponding values from the JSON response
 				$('#url').val(response.url);
@@ -105,18 +105,18 @@ textarea {
 				$('#password').val(response.password);
 				$('#sitename').val(response.sitename);
 				$('#version').val(response.version);
-				// Wert setzen und jQuery Mobile zwingen, die Anzeige zu aktualisieren (.trigger('change'))
+				// Set the value and force jQuery Mobile to refresh the display (.trigger('change'))
 				if (response.mqtt_topic_base) {
 					$('#mqtt_topic_base').val(response.mqtt_topic_base).trigger('change');
 				} else {
-					$('#mqtt_topic_base').val('mac').trigger('change'); 
+					$('#mqtt_topic_base').val('mac').trigger('change');
 				}
 
-				// Gespeicherte MACs in einer globalen Variable ablegen, damit wir sie später beim Neuladen der Liste anhaken können
+				// Store the saved MACs in a global variable so we can tick them when the list is reloaded
 				window.savedMacAddresses = response.macaddresses && Array.isArray(response.macaddresses) ? response.macaddresses : [];
-				
+
 				if (window.savedMacAddresses.length > 0) {
-					$('#device_list_container').html('<i style="color: #666;">Es sind ' + window.savedMacAddresses.length + ' Geräte gespeichert. Klicke auf "Geräteliste von UniFi abrufen" um die Liste anzuzeigen und zu bearbeiten.</i>');
+					$('#device_list_container').html('<i style="color: #666;">' + window.savedMacAddresses.length + ' <TMPL_VAR SETTINGSJS.DEVICES_SAVED></i>');
 				}
 			},
 			error: function (xhr, status, error) {
@@ -166,25 +166,25 @@ textarea {
 
 		var formData = new FormData(document.getElementById('WifiPresenceUnifiSettings'));
 		
-		// Entferne eventuell vom Formular automatisch gesendete Checkbox-Werte
+		// Remove any checkbox values the form may have sent automatically
 		formData.delete('macaddress_checkbox');
 		formData.delete('macaddresses[]');
 
-		// Hole alle angehakten Checkboxen und hänge sie als Array an das formData Objekt an
+		// Collect all checked checkboxes and append them as an array to the formData object
 		var selectedMacs = [];
 		$("input[name='macaddress_checkbox']:checked").each(function() {
 			var mac = $(this).val();
 			selectedMacs.push(mac);
 			formData.append('macaddresses[]', mac);
 		});
-		
-		// Falls nichts angehakt ist (aber die Liste geladen war), müssen wir ein leeres Array schicken
-		// Das machen wir, indem wir einfach einen Dummy-Wert senden, oder das Speichern leitet.
+
+		// If nothing is checked (but the list was loaded), send an empty placeholder
+		// so the backend stores an empty array instead of keeping the previous value
 		if (selectedMacs.length === 0) {
-			formData.append('macaddresses[]', ''); 
+			formData.append('macaddresses[]', '');
 		}
-		
-		// Update der lokalen Speicherung für die UI
+
+		// Update the local copy used by the UI
 		window.savedMacAddresses = selectedMacs;
 
 		$.ajax({
